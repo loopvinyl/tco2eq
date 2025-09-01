@@ -23,9 +23,9 @@ plt.rcParams['font.size'] = 10
 sns.set_style("whitegrid")
 
 # Título do aplicativo
-st.title("Simulador de Emissões de CO₂eq - AMS-III.F")
+st.title("Simulador de Emissões de tCO₂eq")
 st.markdown("""
-Esta ferramenta calcula as emissões de gases de efeito estufa para diferentes cenários de gestão de resíduos,
+Esta ferramenta calcula as emissões de gases de efeito estufa para dois cenários de gestão de resíduos,
 comparando aterro sanitário com vermicompostagem (Proposta da Tese) e compostagem (Metodologia UNFCCC).
 """)
 
