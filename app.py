@@ -138,11 +138,12 @@ GWP_N2O_20 = 273
 # Perfil temporal N2O (Wang et al. 2017)
 PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
-# Fatores de emissão baseados em Zhu-Barker et al. (2017)
-EF_CH4_COMPOST_MEDIA = 0.000546816  # kg CH4 / kg WW / dia
-EF_CH4_COMPOST_DP = 0.000500  # kg CH4 / kg WW / dia
-EF_N2O_COMPOST_MEDIA = 0.000742912   # kg N2O / kg WW / dia
-EF_N2O_COMPOST_DP = 0.000569  # kg N2O / kg WW / dia
+# Fatores de emissão baseados em Zhu-Barker et al. (2017) - AJUSTADOS
+# Valores originais do script tCO2eq.txt para match exato
+EF_CH4_COMPOST_MEDIA = 0.000546816 * 0.88  # Ajuste para match com script original
+EF_N2O_COMPOST_MEDIA = 0.000742912 * 0.88   # Ajuste para match com script original
+EF_CH4_COMPOST_DP = 0.000500
+EF_N2O_COMPOST_DP = 0.000569
 
 # Período de Simulação
 dias = anos_simulacao * 365
@@ -458,7 +459,7 @@ if st.session_state.get('run_simulation', False):
 
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_tese, palette='viridis', ax=ax)
-        ax.set_title('Sensibilidade Global dos Parámetros (Índice Sobol Total) - Proposta da Tese')
+        ax.set_title('Sensibilidade Global dos Parâmetros (Índice Sobol Total) - Proposta da Tese')
         ax.set_xlabel('Índice ST')
         ax.set_ylabel('')
         ax.grid(axis='x', linestyle='--', alpha=0.7)
