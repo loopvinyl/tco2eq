@@ -64,7 +64,7 @@ def br_format(x, pos):
     if abs(x) < 0.01:
         return f"{x:.1e}"
     
-    # Para valores grandes, formata com separador de milhar
+    # Para valores grandes, formata with separador de milhar
     if abs(x) >= 1000:
         return f"{x:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
@@ -419,13 +419,161 @@ if st.session_state.get('run_simulation', False):
 
         st.pyplot(fig)
 
-        # Análise de sensibilidade (apenas visualização, sem cálculos pesados)
-        st.subheader("Análise de Sensibilidade")
-        st.info("""
-        A análise de sensibilidade completa (Sobol e Monte Carlo) demandaria mais recursos computacionais 
-        e tempo de processamento. Em uma implementação completa, esta seção mostraria os índices de 
-        sensibilidade para cada parâmetro do modelo.
-        """)
+        # Análise de Sensibilidade Global (Sobol) - PROPOSTA DA TESE
+        st.subheader("Análise de Sensibilidade Global (Sobol) - Proposta da Tese")
+        
+        problem_tese = {
+            'num_vars': 6,
+            'names': ['umidade_residuos', 'temperatura_media', 'doc', 'k_ano', 'CH4_C_FRAC_YANG', 'N2O_N_FRAC_YANG'],
+            'bounds': [
+                [0.5, 0.85],         # umidade_residuos
+                [25.0, 45.0],       # temperatura_media
+                [0.15, 0.50],       # doc
+                [0.01, 0.47],       # k_ano
+                [0.0005, 0.002],    # CH4_C_FRAC_YANG
+                [0.005, 0.015],     # N2O_N_FRAC_YANG
+            ]
+        }
+
+        param_values_tese = sample(problem_tese, n_samples)
+        results_tese = Parallel(n_jobs=-1)(delayed(executar_simulacao_completa)(params) for params in param_values_tese)
+        Si_tese = analyze(problem_tese, np.array(results_tese), print_to_console=False)
+        
+        sensibilidade_df_tese = pd.DataFrame({
+            'Parâmetro': problem_tese['names'],
+            'S1': Si_tese['S1'],
+            'ST': Si_tese['ST']
+        }).sort_values('ST', ascending=False)
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_tese, palette='viridis', ax=ax)
+        ax.set_title('Sensibilidade Global dos Parâmetros (Índice Sobol Total) - Proposta da Tese')
+        ax.set_xlabel('Índice ST')
+        ax.set_ylabel('')
+        ax.grid(axis='x', linestyle='--', alpha=0.7)
+        st.pyplot(fig)
+
+        # Análise de Sensibilidade Global (Sobol) - CENÁRIO UNFCCC
+        st.subheader("Análise de Sensibilidade Global (Sobol) - Cenário UNFCCC")
+        
+        problem_unfccc = {
+            'num_vars': 4,
+            'names': ['umidade', 'T', 'DOC', 'k_ano'],
+            'bounds': [
+                [0.5, 0.85],  # Umidade (50-85%)
+                [25, 45],  # Temperatura (25-45°C)
+                [0.15, 0.50],  # DOC (15-50%)
+                [0.01, 0.47]  # k_ano
+            ]
+        }
+
+        param_values_unfccc = sample(problem_unfccc, n_samples)
+        results_unfccc = Parallel(n_jobs=-1)(delayed(executar_simulacao_unfccc)(params) for params in param_values_unfccc)
+        Si_unfccc = analyze(problem_unfccc, np.array(results_unfccc), print_to_console=False)
+        
+        sensibilidade_df_unfccc = pd.DataFrame({
+            'Parâmetro': problem_unfccc['names'],
+            'S1': Si_unfccc['S1'],
+            'ST': Si_unfccc['ST']
+        }).sort_values('ST', ascending=False)
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_unfccc, palette='viridis', ax=ax)
+        ax.set_title('Sensibilidade Global dos Parâmetros (Índice Sobol Total) - Cenário UNFCCC')
+        ax.set_xlabel('Índice ST')
+        ax.set_ylabel('')
+        ax.grid(axis='x', linestyle='--', alpha=0.7)
+        st.pyplot(fig)
+
+        # Análise de Incerteza (Monte Carlo) - PROPOSTA DA TESE
+        st.subheader("Análise de Incerteza (Monte Carlo) - Proposta da Tese")
+        
+        def gerar_parametros_mc_tese(n):
+            return [
+                np.random.uniform(0.75, 0.90, n),
+                np.random.normal(25, 3, n),
+                np.random.triangular(0.12, 0.15, 0.18, n),
+                np.random.uniform(0.01, 0.47, n),
+                np.random.lognormal(mean=np.log(0.0013), sigma=0.3, size=n),
+                np.random.weibull(1.2, n) * 0.01
+            ]
+
+        params_tese = gerar_parametros_mc_tese(n_simulations)
+        results_mc_tese = Parallel(n_jobs=-1)(delayed(executar_simulacao_completa)([
+            params_tese[0][i], params_tese[1][i], params_tese[2][i], params_tese[3][i],
+            params_tese[4][i], params_tese[5][i]
+        ]) for i in range(n_simulations))
+
+        results_array_tese = np.array(results_mc_tese)
+        media_tese = np.mean(results_array_tese)
+        intervalo_95_tese = np.percentile(results_array_tese, [2.5, 97.5])
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(results_array_tese, kde=True, bins=30, color='skyblue', ax=ax)
+        ax.axvline(media_tese, color='red', linestyle='--', label=f'Média: {formatar_br(media_tese)} tCO₂eq')
+        ax.axvline(intervalo_95_tese[0], color='green', linestyle=':', label='IC 95%')
+        ax.axvline(intervalo_95_tese[1], color='green', linestyle=':')
+        ax.set_title('Distribuição das Emissões Evitadas (Simulação Monte Carlo) - Proposta da Tese')
+        ax.set_xlabel('Emissões Evitadas (tCO₂eq)')
+        ax.set_ylabel('Frequência')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.xaxis.set_major_formatter(br_formatter)
+        st.pyplot(fig)
+
+        # Análise de Incerteza (Monte Carlo) - CENÁRIO UNFCCC
+        st.subheader("Análise de Incerteza (Monte Carlo) - Cenário UNFCCC")
+        
+        def gerar_parametros_mc_unfccc(n):
+            return [
+                np.random.uniform(0.75, 0.90, n),
+                np.random.normal(25, 3, n),
+                np.random.triangular(0.12, 0.15, 0.18, n),
+                np.random.uniform(0.01, 0.47, n)
+            ]
+
+        params_unfccc = gerar_parametros_mc_unfccc(n_simulations)
+        results_mc_unfccc = Parallel(n_jobs=-1)(delayed(executar_simulacao_unfccc)([
+            params_unfccc[0][i], params_unfccc[1][i], params_unfccc[2][i], params_unfccc[3][i]
+        ]) for i in range(n_simulations))
+
+        results_array_unfccc = np.array(results_mc_unfccc)
+        media_unfccc = np.mean(results_array_unfccc)
+        intervalo_95_unfccc = np.percentile(results_array_unfccc, [2.5, 97.5])
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(results_array_unfccc, kde=True, bins=30, color='coral', ax=ax)
+        ax.axvline(media_unfccc, color='red', linestyle='--', label=f'Média: {formatar_br(media_unfccc)} tCO₂eq')
+        ax.axvline(intervalo_95_unfccc[0], color='green', linestyle=':', label='IC 95%')
+        ax.axvline(intervalo_95_unfccc[1], color='green', linestyle=':')
+        ax.set_title('Distribuição das Emissões Evitadas (Simulação Monte Carlo) - Cenário UNFCCC')
+        ax.set_xlabel('Emissões Evitadas (tCO₂eq)')
+        ax.set_ylabel('Frequência')
+        ax.legend()
+        ax.grid(alpha=0.3)
+        ax.xaxis.set_major_formatter(br_formatter)
+        st.pyplot(fig)
+
+        # Análise Estatística de Comparação
+        st.subheader("Análise Estatística de Comparação")
+        
+        # Verificação das suposições
+        _, p_levene = stats.levene(results_array_tese, results_array_unfccc)
+        st.write(f"Teste de Levene para igualdade de variâncias: p-value = {p_levene:.4f}")
+
+        # Teste T de Student (Paramétrico)
+        try:
+            ttest, p_ttest = stats.ttest_ind(results_array_tese, results_array_unfccc, equal_var=(p_levene > 0.05))
+            st.write(f"Teste T de Student: Estatística t = {ttest:.4f}, P-valor = {p_ttest:.4f}")
+        except Exception as e:
+            st.write(f"Não foi possível rodar o Teste T. Motivo: {e}")
+
+        # Teste U de Mann-Whitney (Não Paramétrico - recomendado)
+        try:
+            u_stat, p_u = stats.mannwhitneyu(results_array_tese, results_array_unfccc)
+            st.write(f"Teste U de Mann-Whitney: Estatística U = {u_stat:.4f}, P-valor = {p_u:.4f}")
+        except Exception as e:
+            st.write(f"Não foi possível rodar o Teste U. Motivo: {e}")
 
         # Tabela de resultados anuais - Proposta da Tese
         st.subheader("Resultados Anuais - Proposta da Tese")
