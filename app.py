@@ -238,11 +238,17 @@ def calcular_emissoes_vermi(params, dias_simulacao=dias):
                 
     return emissoes_CH4, emissoes_N2O
 
-def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=62):
+def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=62, use_random=False):
     umidade, T, DOC, k_ano = params
 
-    ef_ch4 = np.random.normal(EF_CH4_COMPOST_MEDIA, EF_CH4_COMPOST_DP)
-    ef_n2o = np.random.normal(EF_N2O_COMPOST_MEDIA, EF_N2O_COMPOST_DP)
+    if use_random:
+        # Para análises de incerteza - amostragem aleatória
+        ef_ch4 = np.random.normal(EF_CH4_COMPOST_MEDIA, EF_CH4_COMPOST_DP)
+        ef_n2o = np.random.normal(EF_N2O_COMPOST_MEDIA, EF_N2O_COMPOST_DP)
+    else:
+        # Para simulação base - valores fixos (médias)
+        ef_ch4 = EF_CH4_COMPOST_MEDIA
+        ef_n2o = EF_N2O_COMPOST_MEDIA
 
     emissao_diaria_por_lote_ch4 = residuos_kg_dia * ef_ch4 / dias_compostagem
     emissao_diaria_por_lote_n2o = residuos_kg_dia * ef_n2o / dias_compostagem
@@ -280,7 +286,10 @@ def executar_simulacao_unfccc(parametros):
     ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
     total_aterro_tco2eq = (ch4_aterro * GWP_CH4_20 + n2o_aterro * GWP_N2O_20) / 1000
 
-    ch4_compost, n2o_compost = calcular_emissoes_compostagem(parametros, dias_simulacao=dias, dias_compostagem=62)
+    # Para análises de incerteza - usar amostragem aleatória
+    ch4_compost, n2o_compost = calcular_emissoes_compostagem(
+        parametros, dias_simulacao=dias, dias_compostagem=62, use_random=True
+    )
     total_compost_tco2eq = (ch4_compost * GWP_CH4_20 + n2o_compost * GWP_N2O_20) / 1000
 
     reducao_tco2eq = total_aterro_tco2eq.sum() - total_compost_tco2eq.sum()
@@ -330,9 +339,11 @@ if st.session_state.get('run_simulation', False):
             'Total_Vermi_tCO2eq_dia': 'Project emissions (t CO₂eq)',
         }, inplace=True)
 
-        # Cenário UNFCCC
+        # Cenário UNFCCC - usar valores fixos para simulação base
         params_base_unfccc = (umidade, T, DOC, k_ano)
-        ch4_compost_UNFCCC, n2o_compost_UNFCCC = calcular_emissoes_compostagem(params_base_unfccc, dias_simulacao=dias, dias_compostagem=62)
+        ch4_compost_UNFCCC, n2o_compost_UNFCCC = calcular_emissoes_compostagem(
+            params_base_unfccc, dias_simulacao=dias, dias_compostagem=62, use_random=False
+        )
         ch4_compost_unfccc_tco2eq = ch4_compost_UNFCCC * GWP_CH4_20 / 1000
         n2o_compost_unfccc_tco2eq = n2o_compost_UNFCCC * GWP_N2O_20 / 1000
         total_compost_unfccc_tco2eq_dia = ch4_compost_unfccc_tco2eq + n2o_compost_unfccc_tco2eq
@@ -447,7 +458,7 @@ if st.session_state.get('run_simulation', False):
 
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_tese, palette='viridis', ax=ax)
-        ax.set_title('Sensibilidade Global dos Parâmetros (Índice Sobol Total) - Proposta da Tese')
+        ax.set_title('Sensibilidade Global dos Parámetros (Índice Sobol Total) - Proposta da Tese')
         ax.set_xlabel('Índice ST')
         ax.set_ylabel('')
         ax.grid(axis='x', linestyle='--', alpha=0.7)
