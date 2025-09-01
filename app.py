@@ -138,18 +138,11 @@ GWP_N2O_20 = 273
 # Perfil temporal N2O (Wang et al. 2017)
 PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
-# Fatores de emissão baseados em Zhu-Barker et al. (2017) - AJUSTADOS
-# Agora divididos por 62 dias para obter a emissão diária
-DIAS_COMPOSTAGEM_UNFCCC = 62
-EF_CH4_COMPOST_TOTAL = 0.000546816  # kg CH4 / kg WW total
-EF_N2O_COMPOST_TOTAL = 0.000742912   # kg N2O / kg WW total
-EF_CH4_COMPOST_DP_TOTAL = 0.000500  # kg CH4 / kg WW total
-EF_N2O_COMPOST_DP_TOTAL = 0.000569  # kg N2O / kg WW total
-
-EF_CH4_COMPOST_MEDIA = EF_CH4_COMPOST_TOTAL / DIAS_COMPOSTAGEM_UNFCCC  # kg CH4 / kg WW / dia
-EF_N2O_COMPOST_MEDIA = EF_N2O_COMPOST_TOTAL / DIAS_COMPOSTAGEM_UNFCCC   # kg N2O / kg WW / dia
-EF_CH4_COMPOST_DP = EF_CH4_COMPOST_DP_TOTAL / DIAS_COMPOSTAGEM_UNFCCC  # kg CH4 / kg WW / dia
-EF_N2O_COMPOST_DP = EF_N2O_COMPOST_DP_TOTAL / DIAS_COMPOSTAGEM_UNFCCC  # kg N2O / kg WW / dia
+# Fatores de emissão baseados em Zhu-Barker et al. (2017)
+EF_CH4_COMPOST_MEDIA = 0.000546816  # kg CH4 / kg WW / dia
+EF_CH4_COMPOST_DP = 0.000500  # kg CH4 / kg WW / dia
+EF_N2O_COMPOST_MEDIA = 0.000742912   # kg N2O / kg WW / dia
+EF_N2O_COMPOST_DP = 0.000569  # kg N2O / kg WW / dia
 
 # Período de Simulação
 dias = anos_simulacao * 365
@@ -250,16 +243,21 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
 
     if use_random:
         # Para análises de incerteza - amostragem aleatória
-        ef_ch4_total = np.random.normal(EF_CH4_COMPOST_TOTAL, EF_CH4_COMPOST_DP_TOTAL)
-        ef_n2o_total = np.random.normal(EF_N2O_COMPOST_TOTAL, EF_N2O_COMPOST_DP_TOTAL)
+        ef_ch4 = np.random.normal(EF_CH4_COMPOST_MEDIA, EF_CH4_COMPOST_DP)
+        ef_n2o = np.random.normal(EF_N2O_COMPOST_MEDIA, EF_N2O_COMPOST_DP)
     else:
         # Para simulação base - valores fixos (médias)
-        ef_ch4_total = EF_CH4_COMPOST_TOTAL
-        ef_n2o_total = EF_N2O_COMPOST_TOTAL
+        ef_ch4 = EF_CH4_COMPOST_MEDIA
+        ef_n2o = EF_N2O_COMPOST_MEDIA
 
-    # Divisão pelo número de dias de compostagem para obter a emissão diária
-    emissao_diaria_por_lote_ch4 = residuos_kg_dia * ef_ch4_total / dias_compostagem
-    emissao_diaria_por_lote_n2o = residuos_kg_dia * ef_n2o_total / dias_compostagem
+    # CORREÇÃO APLICADA: Os fatores de emissão são TOTAIS, não diários
+    # Devemos dividir esses valores totais pela quantidade de dias de compostagem
+    emissao_total_por_lote_ch4 = residuos_kg_dia * ef_ch4
+    emissao_total_por_lote_n2o = residuos_kg_dia * ef_n2o
+    
+    # Emissão diária por lote
+    emissao_diaria_por_lote_ch4 = emissao_total_por_lote_ch4 / dias_compostagem
+    emissao_diaria_por_lote_n2o = emissao_total_por_lote_n2o / dias_compostagem
 
     emissoes_CH4 = np.zeros(dias_simulacao)
     emissoes_N2O = np.zeros(dias_simulacao)
@@ -275,7 +273,7 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
 
 def executar_simulacao_completa(parametros):
     umidade, T, DOC, k_ano, CH4_C_FRAC, N2O_N_FRAC = parametros
-    params_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
+    params_aterro = (umidade, T, DOC, 100, k_ano)
     params_vermi = (umidade, T, DOC, CH4_C_FRAC, N2O_N_FRAC)
 
     ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
@@ -290,13 +288,13 @@ def executar_simulacao_completa(parametros):
 def executar_simulacao_unfccc(parametros):
     umidade, T, DOC, k_ano = parametros
 
-    params_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
+    params_aterro = (umidade, T, DOC, 100, k_ano)
     ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
     total_aterro_tco2eq = (ch4_aterro * GWP_CH4_20 + n2o_aterro * GWP_N2O_20) / 1000
 
     # Para análises de incerteza - usar amostragem aleatória
     ch4_compost, n2o_compost = calcular_emissoes_compostagem(
-        (umidade, T, DOC, k_ano), dias_simulacao=dias, dias_compostagem=62, use_random=True
+        parametros, dias_simulacao=dias, dias_compostagem=62, use_random=True
     )
     total_compost_tco2eq = (ch4_compost * GWP_CH4_20 + n2o_compost * GWP_N2O_20) / 1000
 
