@@ -138,11 +138,18 @@ GWP_N2O_20 = 273
 # Perfil temporal N2O (Wang et al. 2017)
 PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
-# Fatores de emissão baseados em Zhu-Barker et al. (2017)
-EF_CH4_COMPOST_MEDIA = 0.000546816  # kg CH4 / kg WW / dia
-EF_CH4_COMPOST_DP = 0.000500  # kg CH4 / kg WW / dia
-EF_N2O_COMPOST_MEDIA = 0.000742912   # kg N2O / kg WW / dia
-EF_N2O_COMPOST_DP = 0.000569  # kg N2O / kg WW / dia
+# Fatores de emissão baseados em Zhu-Barker et al. (2017) - AJUSTADOS
+# Agora divididos por 62 dias para obter a emissão diária
+DIAS_COMPOSTAGEM_UNFCCC = 62
+EF_CH4_COMPOST_TOTAL = 0.000546816  # kg CH4 / kg WW total
+EF_N2O_COMPOST_TOTAL = 0.000742912   # kg N2O / kg WW total
+EF_CH4_COMPOST_DP_TOTAL = 0.000500  # kg CH4 / kg WW total
+EF_N2O_COMPOST_DP_TOTAL = 0.000569  # kg N2O / kg WW total
+
+EF_CH4_COMPOST_MEDIA = EF_CH4_COMPOST_TOTAL / DIAS_COMPOSTAGEM_UNFCCC  # kg CH4 / kg WW / dia
+EF_N2O_COMPOST_MEDIA = EF_N2O_COMPOST_TOTAL / DIAS_COMPOSTAGEM_UNFCCC   # kg N2O / kg WW / dia
+EF_CH4_COMPOST_DP = EF_CH4_COMPOST_DP_TOTAL / DIAS_COMPOSTAGEM_UNFCCC  # kg CH4 / kg WW / dia
+EF_N2O_COMPOST_DP = EF_N2O_COMPOST_DP_TOTAL / DIAS_COMPOSTAGEM_UNFCCC  # kg N2O / kg WW / dia
 
 # Período de Simulação
 dias = anos_simulacao * 365
@@ -243,20 +250,16 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
 
     if use_random:
         # Para análises de incerteza - amostragem aleatória
-        ef_ch4 = np.random.normal(EF_CH4_COMPOST_MEDIA, EF_CH4_COMPOST_DP)
-        ef_n2o = np.random.normal(EF_N2O_COMPOST_MEDIA, EF_N2O_COMPOST_DP)
+        ef_ch4_total = np.random.normal(EF_CH4_COMPOST_TOTAL, EF_CH4_COMPOST_DP_TOTAL)
+        ef_n2o_total = np.random.normal(EF_N2O_COMPOST_TOTAL, EF_N2O_COMPOST_DP_TOTAL)
     else:
         # Para simulação base - valores fixos (médias)
-        ef_ch4 = EF_CH4_COMPOST_MEDIA
-        ef_n2o = EF_N2O_COMPOST_MEDIA
+        ef_ch4_total = EF_CH4_COMPOST_TOTAL
+        ef_n2o_total = EF_N2O_COMPOST_TOTAL
 
-    # CORREÇÃO: Os fatores de emissão são TOTAIS, não diários
-    emissao_total_por_lote_ch4 = residuos_kg_dia * ef_ch4
-    emissao_total_por_lote_n2o = residuos_kg_dia * ef_n2o
-    
-    # Emissão diária por lote (distribuída uniformemente ao longo do período de compostagem)
-    emissao_diaria_por_lote_ch4 = emissao_total_por_lote_ch4 / dias_compostagem
-    emissao_diaria_por_lote_n2o = emissao_total_por_lote_n2o / dias_compostagem
+    # Divisão pelo número de dias de compostagem para obter a emissão diária
+    emissao_diaria_por_lote_ch4 = residuos_kg_dia * ef_ch4_total / dias_compostagem
+    emissao_diaria_por_lote_n2o = residuos_kg_dia * ef_n2o_total / dias_compostagem
 
     emissoes_CH4 = np.zeros(dias_simulacao)
     emissoes_N2O = np.zeros(dias_simulacao)
@@ -273,7 +276,7 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
 def executar_simulacao_completa(parametros):
     umidade, T, DOC, k_ano, CH4_C_FRAC, N2O_N_FRAC = parametros
     params_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
-    params_vermi = (umidade, T, DOC, CH4_C_FRAC, N2O_N_FRAC)  # Removido massa_exposta_kg
+    params_vermi = (umidade, T, DOC, CH4_C_FRAC, N2O_N_FRAC)
 
     ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
     ch4_vermi, n2o_vermi = calcular_emissoes_vermi(params_vermi)
@@ -287,13 +290,13 @@ def executar_simulacao_completa(parametros):
 def executar_simulacao_unfccc(parametros):
     umidade, T, DOC, k_ano = parametros
 
-    params_aterro = (umidade, T, DOC, 100, k_ano)
+    params_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
     ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
     total_aterro_tco2eq = (ch4_aterro * GWP_CH4_20 + n2o_aterro * GWP_N2O_20) / 1000
 
     # Para análises de incerteza - usar amostragem aleatória
     ch4_compost, n2o_compost = calcular_emissoes_compostagem(
-        parametros, dias_simulacao=dias, dias_compostagem=62, use_random=True
+        (umidade, T, DOC, k_ano), dias_simulacao=dias, dias_compostagem=62, use_random=True
     )
     total_compost_tco2eq = (ch4_compost * GWP_CH4_20 + n2o_compost * GWP_N2O_20) / 1000
 
@@ -305,7 +308,7 @@ if st.session_state.get('run_simulation', False):
     with st.spinner('Executando simulação...'):
         # Executar modelo base
         params_base_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
-        params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)  # Removido massa_exposta_kg
+        params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)
 
         ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base_aterro)
         ch4_vermi_dia, n2o_vermi_dia = calcular_emissoes_vermi(params_base_vermi)
@@ -445,7 +448,7 @@ if st.session_state.get('run_simulation', False):
                 [0.5, 0.85],         # umidade_residuos
                 [25.0, 45.0],       # temperatura_media
                 [0.15, 0.50],       # doc
-                [0.01, 0.47],       # k_ano - Ajustado para [0.01, 0.47]
+                [0.01, 0.47],       # k_ano
                 [0.0005, 0.002],    # CH4_C_FRAC_YANG
                 [0.005, 0.015],     # N2O_N_FRAC_YANG
             ]
@@ -479,7 +482,7 @@ if st.session_state.get('run_simulation', False):
                 [0.5, 0.85],  # Umidade (50-85%)
                 [25, 45],  # Temperatura (25-45°C)
                 [0.15, 0.50],  # DOC (15-50%)
-                [0.01, 0.47]  # k_ano - Ajustado para [0.01, 0.47]
+                [0.01, 0.47]  # k_ano
             ]
         }
 
@@ -509,7 +512,7 @@ if st.session_state.get('run_simulation', False):
                 np.random.uniform(0.75, 0.90, n),
                 np.random.normal(25, 3, n),
                 np.random.triangular(0.12, 0.15, 0.18, n),
-                np.random.uniform(0.01, 0.47, n),  # Ajustado para [0.01, 0.47]
+                np.random.uniform(0.01, 0.47, n),
                 np.random.lognormal(mean=np.log(0.0013), sigma=0.3, size=n),
                 np.random.weibull(1.2, n) * 0.01
             ]
@@ -545,7 +548,7 @@ if st.session_state.get('run_simulation', False):
                 np.random.uniform(0.75, 0.90, n),
                 np.random.normal(25, 3, n),
                 np.random.triangular(0.12, 0.15, 0.18, n),
-                np.random.uniform(0.01, 0.47, n)  # Ajustado para [0.01, 0.47]
+                np.random.uniform(0.01, 0.47, n)
             ]
 
         params_unfccc = gerar_parametros_mc_unfccc(n_simulations)
