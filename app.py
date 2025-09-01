@@ -25,8 +25,8 @@ sns.set_style("whitegrid")
 # Título do aplicativo
 st.title("Simulador de Emissões de tCO₂eq")
 st.markdown("""
-Esta ferramenta calcula as emissões de gases de efeito estufa para dois cenários de gestão de resíduos,
-comparando aterro sanitário com vermicompostagem (Proposta da Tese) e compostagem (Metodologia UNFCCC).
+Esta ferramenta calcula as emissões de gases de efeito estufa para dois contextos de gestão de resíduos,
+aterro sanitário vs. vermicompostagem (Contexto: Proposta da Tese) e aterro sanitário vs. compostagem (Contexto: UNFCCC).
 """)
 
 # Função para formatar números no padrão brasileiro
