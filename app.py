@@ -459,6 +459,7 @@ st.markdown("""
 
 **Cenário de Baseline (Aterro Sanitário):**
 - IPCC (2006). Guidelines for National Greenhouse Gas Inventories.
+- UNFCCC (2016). Tool to determine methane emissions from solid waste disposal sites.
 - Wang et al. (2017). Nitrous oxide emissions from landfills.
 - Feng et al. (2020). Emissions from pre-disposal organic waste.
 
