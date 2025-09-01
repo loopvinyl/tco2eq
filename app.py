@@ -135,10 +135,10 @@ PERFIL_N2O_PRE_DESCARTE = {1: 0.8623, 2: 0.10, 3: 0.0377}
 GWP_CH4_20 = 79.7
 GWP_N2O_20 = 273
 
-# Perfil temporal N2O (Wang et. al. 2017)
+# Perfil temporal N2O (Wang et al. 2017)
 PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
-# Fatores de emissão baseados em Zhu-Barker et. al. (2017)
+# Fatores de emissão baseados em Zhu-Barker et al. (2017)
 EF_CH4_COMPOST_MEDIA = 0.000546816  # kg CH4 / kg WW / dia
 EF_CH4_COMPOST_DP = 0.000500  # kg CH4 / kg WW / dia
 EF_N2O_COMPOST_MEDIA = 0.000742912   # kg N2O / kg WW / dia
@@ -322,12 +322,12 @@ if st.session_state.get('run_simulation', False):
             'Total_Vermi_tCO2eq_dia': 'sum',
         }).reset_index()
 
-        df_anual_revisado['Emission reductions (tCO₂eq)'] = df_anual_revisado['Total_Aterro_tCO2eq_dia'] - df_anual_revisado['Total_Vermi_tCO2eq_dia']
-        df_anual_revisado['Cumulative reduction (tCO₂eq)'] = df_anual_revisado['Emission reductions (tCO₂eq)'].cumsum()
+        df_anual_revisado['Emission reductions (t CO₂eq)'] = df_anual_revisado['Total_Aterro_tCO2eq_dia'] - df_anual_revisado['Total_Vermi_tCO2eq_dia']
+        df_anual_revisado['Cumulative reduction (t CO₂eq)'] = df_anual_revisado['Emission reductions (t CO₂eq)'].cumsum()
 
         df_anual_revisado.rename(columns={
-            'Total_Aterro_tCO2eq_dia': 'Baseline emissions (tCO₂eq)',
-            'Total_Vermi_tCO2eq_dia': 'Project emissions (tCO₂eq)',
+            'Total_Aterro_tCO2eq_dia': 'Baseline emissions (t CO₂eq)',
+            'Total_Vermi_tCO2eq_dia': 'Project emissions (t CO₂eq)',
         }, inplace=True)
 
         # Cenário UNFCCC
@@ -348,12 +348,12 @@ if st.session_state.get('run_simulation', False):
         }).reset_index()
 
         df_comp_anual_revisado = pd.merge(df_comp_anual_revisado,
-                                         df_anual_revisado[['Year', 'Baseline emissions (tCO₂eq)']],
+                                         df_anual_revisado[['Year', 'Baseline emissions (t CO₂eq)']],
                                          on='Year', how='left')
 
-        df_comp_anual_revisado['Emission reductions (tCO₂eq)'] = df_comp_anual_revisado['Baseline emissions (tCO₂eq)'] - df_comp_anual_revisado['Total_Compost_tCO2eq_dia']
-        df_comp_anual_revisado['Cumulative reduction (tCO₂eq)'] = df_comp_anual_revisado['Emission reductions (tCO₂eq)'].cumsum()
-        df_comp_anual_revisado.rename(columns={'Total_Compost_tCO2eq_dia': 'Project emissions (tCO₂eq)'}, inplace=True)
+        df_comp_anual_revisado['Emission reductions (t CO₂eq)'] = df_comp_anual_revisado['Baseline emissions (t CO₂eq)'] - df_comp_anual_revisado['Total_Compost_tCO2eq_dia']
+        df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'] = df_comp_anual_revisado['Emission reductions (t CO₂eq)'].cumsum()
+        df_comp_anual_revisado.rename(columns={'Total_Compost_tCO2eq_dia': 'Project emissions (t CO₂eq)'}, inplace=True)
 
         # Exibir resultados
         st.header("Resultados da Simulação")
@@ -363,15 +363,15 @@ if st.session_state.get('run_simulation', False):
             total_evitado_tese = df['Reducao_tCO2eq_acum'].iloc[-1]
             st.metric("Total de emissões evitadas (Tese)", f"{formatar_br(total_evitado_tese)} tCO₂eq")
         with col2:
-            total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (tCO₂eq)'].iloc[-1]
+            total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
             st.metric("Total de emissões evitadas (UNFCCC)", f"{formatar_br(total_evitado_unfccc)} tCO₂eq")
 
         # Gráfico comparativo
         st.subheader("Comparação Anual das Emissões Evitadas")
         df_evitadas_anual = pd.DataFrame({
             'Year': df_anual_revisado['Year'],
-            'Proposta da Tese': df_anual_revisado['Emission reductions (tCO₂eq)'],
-            'UNFCCC (2012)': df_comp_anual_revisado['Emission reductions (tCO₂eq)']
+            'Proposta da Tese': df_anual_revisado['Emission reductions (t CO₂eq)'],
+            'UNFCCC (2012)': df_comp_anual_revisado['Emission reductions (t CO₂eq)']
         })
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -393,7 +393,7 @@ if st.session_state.get('run_simulation', False):
                     formatar_br(v2), ha='center', fontsize=9, fontweight='bold')
 
         ax.set_xlabel('Ano')
-        ax.set_ylabel('Emissões Evitadas (tCO₂eq)')
+        ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
         ax.set_title('Comparação Anual das Emissões Evitadas: Proposta da Tese vs UNFCCC (2012)')
         ax.set_xticks(x)
         ax.set_xticklabels(df_evitadas_anual['Year'])
@@ -478,7 +478,7 @@ if st.session_state.get('run_simulation', False):
         }).sort_values('ST', ascending=False)
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x='ST', y='Parámetro', data=sensibilidade_df_unfccc, palette='viridis', ax=ax)
+        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_unfccc, palette='viridis', ax=ax)
         ax.set_title('Sensibilidade Global dos Parâmetros (Índice Sobol Total) - Cenário UNFCCC')
         ax.set_xlabel('Índice ST')
         ax.set_ylabel('')
