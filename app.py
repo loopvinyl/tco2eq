@@ -26,7 +26,7 @@ sns.set_style("whitegrid")
 st.title("Simulador de Emissões de CO₂eq - AMS-III.F")
 st.markdown("""
 Esta ferramenta calcula as emissões de gases de efeito estufa para diferentes cenários de gestão de resíduos,
-comparando aterro sanitário com vermicompostagem e compostagem seguindo a metodologia UNFCCC.
+comparando aterro sanitário com vermicompostagem (Proposta da Tese) e compostagem (Metodologia UNFCCC).
 """)
 
 # Função para formatar números no padrão brasileiro
@@ -80,7 +80,12 @@ with st.sidebar:
                                min_value=10, max_value=1000, value=100, step=10)
     
     st.subheader("Parâmetros Operacionais")
-    umidade = st.slider("Umidade do resíduo (0-1)", 0.5, 0.95, 0.85, 0.01)
+    
+    # Umidade com formatação brasileira (0,85 em vez de 0.85)
+    umidade_valor = st.slider("Umidade do resíduo", 50, 95, 85, 1)
+    umidade = umidade_valor / 100.0
+    st.write(f"Umidade selecionada: {formatar_br(umidade_valor)}%")
+    
     massa_exposta_kg = st.slider("Massa exposta na frente de trabalho (kg)", 50, 200, 100, 10)
     h_exposta = st.slider("Horas expostas por dia", 4, 24, 8, 1)
     
@@ -450,9 +455,17 @@ else:
 # Rodapé
 st.markdown("---")
 st.markdown("""
-**Referências:**  
-- IPCC (2006). Guidelines for National Greenhouse Gas Inventories.  
-- Yang et al. (2017). Greenhouse gas emissions from vermicomposting.  
-- Feng et al. (2020). Emissions from pre-disposal organic waste.  
-- UNFCCC (2012). AMS-III.F - Methodology for vermicomposting.
+**Referências por Cenário:**
+
+**Cenário de Baseline (Aterro Sanitário):**
+- IPCC (2006). Guidelines for National Greenhouse Gas Inventories.
+- Wang et al. (2017). Nitrous oxide emissions from landfills.
+- Feng et al. (2020). Emissions from pre-disposal organic waste.
+
+**Proposta da Tese (Vermicompostagem):**
+- Yang et al. (2017). Greenhouse gas emissions from vermicomposting.
+
+**Cenário UNFCCC (Compostagem):**
+- UNFCCC (2012). AMS-III.F - Methodology for compostage.
+- Zhu-Barker et al. (2017). Greenhouse gas emissions from composting.
 """)
