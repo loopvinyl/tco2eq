@@ -250,12 +250,11 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
         ef_ch4 = EF_CH4_COMPOST_MEDIA
         ef_n2o = EF_N2O_COMPOST_MEDIA
 
-    # CORREÇÃO APLICADA: Os fatores de emissão são TOTAIS, não diários
-    # Devemos dividir esses valores totais pela quantidade de dias de compostagem
+    # CORREÇÃO: Os fatores de emissão são TOTAIS, não diários
     emissao_total_por_lote_ch4 = residuos_kg_dia * ef_ch4
     emissao_total_por_lote_n2o = residuos_kg_dia * ef_n2o
     
-    # Emissão diária por lote
+    # Emissão diária por lote (distribuída uniformemente ao longo do período de compostagem)
     emissao_diaria_por_lote_ch4 = emissao_total_por_lote_ch4 / dias_compostagem
     emissao_diaria_por_lote_n2o = emissao_total_por_lote_n2o / dias_compostagem
 
@@ -273,8 +272,8 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
 
 def executar_simulacao_completa(parametros):
     umidade, T, DOC, k_ano, CH4_C_FRAC, N2O_N_FRAC = parametros
-    params_aterro = (umidade, T, DOC, 100, k_ano)
-    params_vermi = (umidade, T, DOC, CH4_C_FRAC, N2O_N_FRAC)
+    params_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
+    params_vermi = (umidade, T, DOC, CH4_C_FRAC, N2O_N_FRAC)  # Removido massa_exposta_kg
 
     ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
     ch4_vermi, n2o_vermi = calcular_emissoes_vermi(params_vermi)
@@ -306,7 +305,7 @@ if st.session_state.get('run_simulation', False):
     with st.spinner('Executando simulação...'):
         # Executar modelo base
         params_base_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
-        params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)
+        params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)  # Removido massa_exposta_kg
 
         ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base_aterro)
         ch4_vermi_dia, n2o_vermi_dia = calcular_emissoes_vermi(params_base_vermi)
@@ -446,7 +445,7 @@ if st.session_state.get('run_simulation', False):
                 [0.5, 0.85],         # umidade_residuos
                 [25.0, 45.0],       # temperatura_media
                 [0.15, 0.50],       # doc
-                [0.01, 0.47],       # k_ano
+                [0.01, 0.47],       # k_ano - Ajustado para [0.01, 0.47]
                 [0.0005, 0.002],    # CH4_C_FRAC_YANG
                 [0.005, 0.015],     # N2O_N_FRAC_YANG
             ]
@@ -480,7 +479,7 @@ if st.session_state.get('run_simulation', False):
                 [0.5, 0.85],  # Umidade (50-85%)
                 [25, 45],  # Temperatura (25-45°C)
                 [0.15, 0.50],  # DOC (15-50%)
-                [0.01, 0.47]  # k_ano
+                [0.01, 0.47]  # k_ano - Ajustado para [0.01, 0.47]
             ]
         }
 
@@ -510,7 +509,7 @@ if st.session_state.get('run_simulation', False):
                 np.random.uniform(0.75, 0.90, n),
                 np.random.normal(25, 3, n),
                 np.random.triangular(0.12, 0.15, 0.18, n),
-                np.random.uniform(0.01, 0.47, n),
+                np.random.uniform(0.01, 0.47, n),  # Ajustado para [0.01, 0.47]
                 np.random.lognormal(mean=np.log(0.0013), sigma=0.3, size=n),
                 np.random.weibull(1.2, n) * 0.01
             ]
@@ -546,7 +545,7 @@ if st.session_state.get('run_simulation', False):
                 np.random.uniform(0.75, 0.90, n),
                 np.random.normal(25, 3, n),
                 np.random.triangular(0.12, 0.15, 0.18, n),
-                np.random.uniform(0.01, 0.47, n)
+                np.random.uniform(0.01, 0.47, n)  # Ajustado para [0.01, 0.47]
             ]
 
         params_unfccc = gerar_parametros_mc_unfccc(n_simulations)
