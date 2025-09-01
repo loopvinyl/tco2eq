@@ -29,6 +29,48 @@ Esta ferramenta calcula as emissões de gases de efeito estufa para diferentes c
 comparando aterro sanitário com vermicompostagem e compostagem seguindo a metodologia UNFCCC.
 """)
 
+# Função para formatar números no padrão brasileiro
+def formatar_br(numero):
+    """
+    Formata números no padrão brasileiro: 1.234,56
+    """
+    if pd.isna(numero):
+        return "N/A"
+    
+    # Arredonda para 2 casas decimais
+    numero = round(numero, 2)
+    
+    # Separa parte inteira e decimal
+    parte_inteira = int(numero)
+    parte_decimal = round(numero - parte_inteira, 2)
+    
+    # Formata a parte inteira com separadores de milhar
+    parte_inteira_str = f"{parte_inteira:,}".replace(",", ".")
+    
+    # Formata a parte decimal
+    parte_decimal_str = f"{parte_decimal:.2f}"[2:]  # Pega apenas os dois dígitos decimais
+    
+    return f"{parte_inteira_str},{parte_decimal_str}"
+
+# Função de formatação para os gráficos
+def br_format(x, pos):
+    """
+    Função de formatação para eixos de gráficos (padrão brasileiro)
+    """
+    if x == 0:
+        return "0"
+    
+    # Para valores muito pequenos, usa notação científica
+    if abs(x) < 0.01:
+        return f"{x:.1e}"
+    
+    # Para valores grandes, formata com separador de milhar
+    if abs(x) >= 1000:
+        return f"{x:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    # Para valores menores, mostra duas casas decimais
+    return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 # Sidebar para entrada de parâmetros
 with st.sidebar:
     st.header("Parâmetros de Entrada")
@@ -239,10 +281,6 @@ def executar_simulacao_unfccc(parametros):
     reducao_tco2eq = total_aterro_tco2eq.sum() - total_compost_tco2eq.sum()
     return reducao_tco2eq
 
-# Função para formatar números no padrão brasileiro
-def br_format(x, pos):
-    return f'{x:,.0f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-
 # Executar simulação quando solicitado
 if st.session_state.get('run_simulation', False):
     with st.spinner('Executando simulação...'):
@@ -318,10 +356,10 @@ if st.session_state.get('run_simulation', False):
         col1, col2 = st.columns(2)
         with col1:
             total_evitado_tese = df['Reducao_tCO2eq_acum'].iloc[-1]
-            st.metric("Total de emissões evitadas (Tese)", f"{total_evitado_tese:,.2f} tCO₂eq")
+            st.metric("Total de emissões evitadas (Tese)", f"{formatar_br(total_evitado_tese)} tCO₂eq")
         with col2:
             total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
-            st.metric("Total de emissões evitadas (UNFCCC)", f"{total_evitado_unfccc:,.2f} tCO₂eq")
+            st.metric("Total de emissões evitadas (UNFCCC)", f"{formatar_br(total_evitado_unfccc)} tCO₂eq")
 
         # Gráfico comparativo
         st.subheader("Comparação Anual das Emissões Evitadas")
@@ -340,6 +378,14 @@ if st.session_state.get('run_simulation', False):
                 label='Proposta da Tese', edgecolor='black')
         ax.bar(x + bar_width/2, df_evitadas_anual['UNFCCC (2012)'], width=bar_width,
                 label='UNFCCC (2012)', edgecolor='black', hatch='//')
+
+        # Adicionar valores formatados em cima das barras
+        for i, (v1, v2) in enumerate(zip(df_evitadas_anual['Proposta da Tese'], 
+                                         df_evitadas_anual['UNFCCC (2012)'])):
+            ax.text(i - bar_width/2, v1 + max(v1, v2)*0.01, 
+                    formatar_br(v1), ha='center', fontsize=9, fontweight='bold')
+            ax.text(i + bar_width/2, v2 + max(v1, v2)*0.01, 
+                    formatar_br(v2), ha='center', fontsize=9, fontweight='bold')
 
         ax.set_xlabel('Ano')
         ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
@@ -376,22 +422,27 @@ if st.session_state.get('run_simulation', False):
         sensibilidade para cada parâmetro do modelo.
         """)
 
-        # Tabela de resultados anuais
+        # Tabela de resultados anuais - Proposta da Tese
         st.subheader("Resultados Anuais - Proposta da Tese")
-        st.dataframe(df_anual_revisado.style.format({
-            'Baseline emissions (t CO₂eq)': '{:,.2f}',
-            'Project emissions (t CO₂eq)': '{:,.2f}',
-            'Emission reductions (t CO₂eq)': '{:,.2f}',
-            'Cumulative reduction (t CO₂eq)': '{:,.2f}'
-        }))
 
+        # Criar uma cópia para formatação
+        df_anual_formatado = df_anual_revisado.copy()
+        for col in df_anual_formatado.columns:
+            if col != 'Year':
+                df_anual_formatado[col] = df_anual_formatado[col].apply(formatar_br)
+
+        st.dataframe(df_anual_formatado)
+
+        # Tabela de resultados anuais - Metodologia UNFCCC
         st.subheader("Resultados Anuais - Metodologia UNFCCC")
-        st.dataframe(df_comp_anual_revisado.style.format({
-            'Baseline emissions (t CO₂eq)': '{:,.2f}',
-            'Project emissions (t CO₂eq)': '{:,.2f}',
-            'Emission reductions (t CO₂eq)': '{:,.2f}',
-            'Cumulative reduction (t CO₂eq)': '{:,.2f}'
-        }))
+
+        # Criar uma cópia para formatação
+        df_comp_formatado = df_comp_anual_revisado.copy()
+        for col in df_comp_formatado.columns:
+            if col != 'Year':
+                df_comp_formatado[col] = df_comp_formatado[col].apply(formatar_br)
+
+        st.dataframe(df_comp_formatado)
 
 else:
     st.info("Ajuste os parâmetros na barra lateral e clique em 'Executar Simulação' para ver os resultados.")
