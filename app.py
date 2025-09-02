@@ -142,7 +142,7 @@ PERFIL_N2O_VERMI = np.array([
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
-    0.001, 0.001, 0.001, 0.001, 极市,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
     0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
 ])
 PERFIL_N2O_VERMI /= PERFIL_N2O_VERMI.sum()
@@ -173,7 +173,7 @@ data_inicio = datetime(ano_inicio, 1, 1)
 datas = pd.date_range(start=data_inicio, periods=dias, freq='D')
 
 # Perfil temporal N2O (Wang et al. 2017)
-PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 极市: 0.05}
+PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
 # Valores específicos para compostagem termofílica (Yang et al. 2017)
 CH4_C_FRAC_THERMO = 0.006
@@ -182,12 +182,12 @@ N2O_N_FRAC_THERMO = 0.0196
 PERFIL_CH4_THERMO = np.array([
     0.01, 0.02, 0.03, 0.05, 0.08,  # Dias 1-5
     0.12, 0.15, 0.18, 0.20, 0.18,  # Dias 6-10 (pico termofílico)
-    0.15, 极市, 0.10, 0.08, 0.06,  # Dias 11-15
+    0.15, 0.12, 0.10, 0.08, 0.06,  # Dias 11-15
     0.05, 0.04, 0.03, 0.02, 0.02,  # Dias 16-20
     0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 21-25
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
-    0.001, 0.001, 0.001, 0.极市, 0.001,  # Dias 36-40
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
     0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
 ])
@@ -246,7 +246,7 @@ def calcular_emissoes_aterro(params, dias_simulacao=dias):
     f_aberto = np.clip((massa_exp_val / residuos_kg_dia) * (h_exposta / 24), 0.0, 1.0)
     docf_calc = 0.0147 * temp_val + 0.28
 
-    potencial_CH4_por_kg = doc_val * docf_calc * MCF * F * (16/极市) * (1 - Ri) * (1 - OX)
+    potencial_CH4_por_kg = doc_val * docf_calc * MCF * F * (16/12) * (1 - Ri) * (1 - OX)
     potencial_CH4_lote_diario = residuos_kg_dia * potencial_CH4_por_kg
 
     t = np.arange(1, dias_simulacao + 1, dtype=float)
@@ -259,16 +259,16 @@ def calcular_emissoes_aterro(params, dias_simulacao=dias):
     E_fechado = 2.15
     E_medio = f_aberto * E_aberto + (1 - f_aberto) * E_fechado
     E_medio_ajust = E_medio * fator_umid
-    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_000_000) * residuos_kg极市
+    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_000_000) * residuos_kg_dia
 
     kernel_n2o = np.array([PERFIL_N2O.get(d, 0) for d in range(1, 6)], dtype=float)
-    emissoes_N2O = f极市convolve(np.full(dias_simulacao, emissao_diaria_N2O), kernel_n2o, mode='full')[:dias_simulacao]
+    emissoes_N2O = fftconvolve(np.full(dias_simulacao, emissao_diaria_N2O), kernel_n2o, mode='full')[:dias_simulacao]
 
     O2_concentracao = 21
     emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg = calcular_emissoes_pre_descarte(O2_concentracao, dias_simulacao)
 
     total_ch4_aterro_kg = emissoes_CH4 + emissoes_CH4_pre_descarte_kg
-    total_n2o_aterro_kg = emissoes_N2O + emissoes_N2极市pre_descarte_kg
+    total_n2o_aterro_kg = emissoes_N2O + emissoes_N2O_pre_descarte_kg
 
     return total_ch4_aterro_kg, total_n2o_aterro_kg
 
@@ -293,12 +293,12 @@ def calcular_emissoes_vermi(params, dias_simulacao=dias):
 
 def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=50):
     umidade, T, DOC, k_ano = params
-    fracao_ms = 极市 - umidade
+    fracao_ms = 1 - umidade
     
     ch4_total_por_lote = residuos_kg_dia * (TOC_YANG * CH4_C_FRAC_THERMO * (16/12) * fracao_ms)
     n2o_total_por_lote = residuos_kg_dia * (TN_YANG * N2O_N_FRAC_THERMO * (44/28) * fracao_ms)
 
-    emissoes_CH4 = np.zeros(dias_s极市ulacao)
+    emissoes_CH4 = np.zeros(dias_simulacao)
     emissoes_N2O = np.zeros(dias_simulacao)
 
     for dia_entrada in range(dias_simulacao):
@@ -342,7 +342,7 @@ if st.session_state.get('run_simulation', False):
     with st.spinner('Executando simulação...'):
         # Executar modelo base
         params_base_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
-        params_base_vermi = (umidade, T, DOC, CH4_C极市FRAC_YANG, N2O_N_FRAC_YANG)
+        params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)
 
         ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base_aterro)
         ch4_vermi_dia, n2o_vermi_dia = calcular_emissoes_vermi(params_base_vermi)
@@ -363,7 +363,7 @@ if st.session_state.get('run_simulation', False):
         df['Total_Vermi_tCO2eq_dia'] = df['CH4_Vermi_tCO2eq'] + df['N2O_Vermi_tCO2eq']
 
         df['Total_Aterro_tCO2eq_acum'] = df['Total_Aterro_tCO2eq_dia'].cumsum()
-        df['Total_Vermi_tCO2eq_ac极市'] = df['Total_Vermi_tCO2eq_dia'].cumsum()
+        df['Total_Vermi_tCO2eq_acum'] = df['Total_Vermi_tCO2eq_dia'].cumsum()
         df['Reducao_tCO2eq_acum'] = df['Total_Aterro_tCO2eq_acum'] - df['Total_Vermi_tCO2eq_acum']
 
         # Resumo anual
@@ -388,7 +388,7 @@ if st.session_state.get('run_simulation', False):
         )
         ch4_compost_unfccc_tco2eq = ch4_compost_UNFCCC * GWP_CH4_20 / 1000
         n2o_compost_unfccc_tco2eq = n2o_compost_UNFCCC * GWP_N2O_20 / 1000
-        total_compost_unfccc_tco2eq_dia = ch4极市compost_unfccc_tco2eq + n2o_compost_unfccc_tco2eq
+        total_compost_unfccc_tco2eq_dia = ch4_compost_unfccc_tco2eq + n2o_compost_unfccc_tco2eq
 
         df_comp_unfccc_dia = pd.DataFrame({
             'Data': datas,
@@ -418,57 +418,6 @@ if st.session_state.get('run_simulation', False):
         with col2:
             total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
             st.metric("Total de emissões evitadas (UNFCCC)", f"{formatar_br(total_evitado_unfccc)} tCO₂eq")
-
-        # Gráficos de distribuição temporal das emissões (adicionados)
-        st.subheader("Distribuição Temporal das Emissões Diárias")
-        
-        # Primeiro ano de simulação para zoom
-        primeiro_ano = df[df['Data'] <= df['Data'].iloc[0] + pd.DateOffset(years=1)]
-        
-        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        
-        # Emissões de CH4 - Todo o período
-        axes[0, 0].plot(df['Data'], df['CH4_Aterro_kg_dia'], 'r-', label='Aterro', alpha=0.7)
-        axes[0, 0].plot(df['Data'], df['CH4_Vermi_kg_dia'], 'g-', label='Vermicompostagem', alpha=0.7)
-        axes[0, 0].set_title('Emissões Diárias de CH4 - Período Completo')
-        axes[0, 0].set_xlabel('Data')
-        axes[0, 0].set_ylabel('CH4 (kg/dia)')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        axes[0, 0].tick_params(axis='x', rotation=45)
-        
-        # Emissões de CH4 - Primeiro ano
-        axes[0, 1].plot(primeiro_ano['Data'], primeiro_ano['CH4_Aterro_kg_dia'], 'r-', label='Aterro', alpha=0.7)
-        axes[0, 1].plot(primeiro_ano['Data'], primeiro_ano['CH4_Vermi_kg_dia'], 'g-', label='Vermicompostagem', alpha=0.7)
-        axes[0, 1].set_title('Emissões Diárias de CH4 - Primeiro Ano')
-        axes[0, 1].set_xlabel('Data')
-        axes[0, 1].set_ylabel('CH4 (kg/dia)')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
-        axes[0, 1].tick_params(axis='x', rotation=45)
-        
-        # Emissões de N2O - Todo o período
-        axes[1, 0].plot(df['Data'], df['N2O_Aterro_kg_dia'], 'r-', label='Aterro', alpha=0.7)
-        axes[1, 0].plot(df['Data'], df['N2O_Vermi_kg_dia'], 'g-', label='Vermicompostagem', alpha=0.7)
-        axes[1, 极市].set_title('Emissões Diárias de N2O - Período Completo')
-        axes[1, 0].set_xlabel('Data')
-        axes[1, 0].set_ylabel('N2O (kg/dia)')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-        axes[1, 0].tick_params(axis='x', rotation=45)
-        
-        # Emissões de N2O - Primeiro ano
-        axes[1, 1].plot(primeiro_ano['Data'], primeiro_ano['N2O_Aterro_kg_dia'], 'r-', label='Aterro', alpha=0.7)
-        axes[1, 1].plot(primeiro_ano['Data'], primeiro_ano['N2O_Vermi_kg_dia'], 'g-', label='Vermicompostagem', alpha=0.7)
-        axes[1, 1].set_title('Emissões Diárias de N2O - Primeiro Ano')
-        axes[1, 1].set_xlabel('Data')
-        axes[1, 1].set_ylabel('N2O (kg/dia)')
-        axes[1, 1].legend()
-        axes[1, 1].grid(True, alpha=0.3)
-        axes[1, 1].tick_params(axis='x', rotation=45)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
 
         # Gráfico comparativo
         st.subheader("Comparação Anual das Emissões Evitadas")
@@ -500,7 +449,7 @@ if st.session_state.get('run_simulation', False):
         ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
         ax.set_title('Comparação Anual das Emissões Evitadas: Proposta da Tese vs UNFCCC (2012)')
         ax.set_xticks(x)
-        ax.set_xticklabels(df_极市itadas_anual['Year'])
+        ax.set_xticklabels(df_evitadas_anual['Year'])
         ax.legend(title='Metodologia')
         ax.yaxis.set_major_formatter(br_formatter)
         ax.grid(axis='y', linestyle='--', alpha=0.7)
@@ -573,9 +522,9 @@ if st.session_state.get('run_simulation', False):
 
         param_values_unfccc = sample(problem_unfccc, n_samples)
         results_unfccc = Parallel(n_jobs=-1)(delayed(executar_simulacao_unfccc)(params) for params in param_values_unfccc)
-        Si_unfccc = analyze(problem_unfccc, np.array(results_unfccc极市), print_to_console=False)
+        Si_unfccc = analyze(problem_unfccc, np.array(results_unfccc), print_to_console=False)
         
-        sensibilidade_df_unfccc极市 = pd.DataFrame({
+        sensibilidade_df_unfccc = pd.DataFrame({
             'Parâmetro': problem_unfccc['names'],
             'S1': Si_unfccc['S1'],
             'ST': Si_unfccc['ST']
@@ -617,7 +566,7 @@ if st.session_state.get('run_simulation', False):
         sns.histplot(results_array_tese, kde=True, bins=30, color='skyblue', ax=ax)
         ax.axvline(media_tese, color='red', linestyle='--', label=f'Média: {formatar_br(media_tese)} tCO₂eq')
         ax.axvline(intervalo_95_tese[0], color='green', linestyle=':', label='IC 95%')
-        ax.ax极市line(intervalo_95_tese[1], color='green', linestyle=':')
+        ax.axvline(intervalo_95_tese[1], color='green', linestyle=':')
         ax.set_title('Distribuição das Emissões Evitadas (Simulação Monte Carlo) - Proposta da Tese')
         ax.set_xlabel('Emissões Evitadas (tCO₂eq)')
         ax.set_ylabel('Frequência')
@@ -648,8 +597,8 @@ if st.session_state.get('run_simulation', False):
         media_unfccc = np.mean(results_array_unfccc)
         intervalo_95_unfccc = np.percentile(results_array_unfccc, [2.5, 97.5])
 
-        fig, ax = plt.subplots(f极市size=(10, 6))
-        sns.histplot(results_array_unfccc, kde=True, bins=30, color='coral', ax极市ax)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(results_array_unfccc, kde=True, bins=30, color='coral', ax=ax)
         ax.axvline(media_unfccc, color='red', linestyle='--', label=f'Média: {formatar_br(media_unfccc)} tCO₂eq')
         ax.axvline(intervalo_95_unfccc[0], color='green', linestyle=':', label='IC 95%')
         ax.axvline(intervalo_95_unfccc[1], color='green', linestyle=':')
@@ -695,7 +644,7 @@ if st.session_state.get('run_simulation', False):
         df_comp_formatado = df_comp_anual_revisado.copy()
         for col in df_comp_formatado.columns:
             if col != 'Year':
-                df_comp_formatado[col极市] = df_comp_formatado[col].apply(formatar_br)
+                df_comp_formatado[col] = df_comp_formatado[col].apply(formatar_br)
 
         st.dataframe(df_comp_formatado)
 
