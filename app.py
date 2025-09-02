@@ -267,10 +267,18 @@ if st.session_state.get("run_simulation", False):
     media_thermo = np.mean(reducao_thermo_t)
 
     # Teste T Pareado
-    t_stat_pareado, p_ttest_pareado = stats.ttest_rel(reducao_vermi_t, reducao_thermo_t)
+    try:
+        t_stat_pareado, p_ttest_pareado = stats.ttest_rel(reducao_vermi_t, reducao_thermo_t)
+        p_ttest_str = f"{p_ttest_pareado:.4f}"
+    except (TypeError, ValueError):
+        p_ttest_str = "Erro no cálculo"
 
     # Teste de Wilcoxon (não paramétrico)
-    wilcoxon_stat, p_wilcoxon = stats.wilcoxon(reducao_vermi_t, reducao_thermo_t)
+    try:
+        wilcoxon_stat, p_wilcoxon = stats.wilcoxon(reducao_vermi_t, reducao_thermo_t)
+        p_wilcoxon_str = f"{p_wilcoxon:.4f}"
+    except (TypeError, ValueError):
+        p_wilcoxon_str = "Erro no cálculo"
 
     st.success("Simulação concluída!")
 
@@ -293,12 +301,14 @@ if st.session_state.get("run_simulation", False):
     st.subheader("Análise Estatística da Diferença de Reduções")
     st.markdown(f"""
     - **Diferença Média (Tese vs UNFCCC):** {formatar_br(media_vermi - media_thermo)} tCO₂eq
-    - **Teste T Pareado (p-value):** {p_ttest_pareado:.4f}
-    - **Teste de Wilcoxon (p-value):** {p_wilcoxon:.4f}
+    - **Teste T Pareado (p-value):** {p_ttest_str}
+    - **Teste de Wilcoxon (p-value):** {p_wilcoxon_str}
     """)
-    if p_ttest_pareado < 0.05 and p_wilcoxon < 0.05:
+    
+    # Verificação para a mensagem de significância
+    if isinstance(p_ttest_pareado, (float, np.float64)) and p_ttest_pareado < 0.05 and isinstance(p_wilcoxon, (float, np.float64)) and p_wilcoxon < 0.05:
         st.success("A diferença nas reduções de emissões entre os dois cenários é estatisticamente significativa.")
-    else:
+    elif isinstance(p_ttest_pareado, (float, np.float64)) and isinstance(p_wilcoxon, (float, np.float64)):
         st.warning("A diferença não é estatisticamente significativa ao nível de 95% de confiança.")
 
     st.markdown("---")
