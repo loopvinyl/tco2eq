@@ -783,5 +783,5 @@ st.markdown("""
 
 **Cenário UNFCCC (Compostagem):**
 - UNFCCC (2012). AMS-III.F - Methodology for compostage.
-- Zhu-Barker et al. (2017). Greenhouse gas emissions from composting.
+- Yang et al. (2017). Greenhouse gas emissions from composting.
 """)
