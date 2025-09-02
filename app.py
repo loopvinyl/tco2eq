@@ -263,22 +263,28 @@ if st.session_state.get("run_simulation", False):
     reducao_vermi_t = emissoes_aterro_t - emissoes_vermi_t
     reducao_thermo_t = emissoes_aterro_t - emissoes_thermo_t
 
-    media_vermi = np.mean(reducao_vermi_t)
-    media_thermo = np.mean(reducao_thermo_t)
+    # Achatar os arrays para uso nos testes estatísticos e gráficos
+    reducao_vermi_flat = reducao_vermi_t.flatten()
+    reducao_thermo_flat = reducao_thermo_t.flatten()
+
+    media_vermi = np.mean(reducao_vermi_flat)
+    media_thermo = np.mean(reducao_thermo_flat)
 
     # Teste T Pareado
     try:
-        t_stat_pareado, p_ttest_pareado = stats.ttest_rel(reducao_vermi_t, reducao_thermo_t)
+        t_stat_pareado, p_ttest_pareado = stats.ttest_rel(reducao_vermi_flat, reducao_thermo_flat)
         p_ttest_str = f"{p_ttest_pareado:.4f}"
     except (TypeError, ValueError):
         p_ttest_str = "Erro no cálculo"
+        p_ttest_pareado = np.nan
 
     # Teste de Wilcoxon (não paramétrico)
     try:
-        wilcoxon_stat, p_wilcoxon = stats.wilcoxon(reducao_vermi_t, reducao_thermo_t)
+        wilcoxon_stat, p_wilcoxon = stats.wilcoxon(reducao_vermi_flat, reducao_thermo_flat)
         p_wilcoxon_str = f"{p_wilcoxon:.4f}"
     except (TypeError, ValueError):
         p_wilcoxon_str = "Erro no cálculo"
+        p_wilcoxon = np.nan
 
     st.success("Simulação concluída!")
 
@@ -319,8 +325,8 @@ if st.session_state.get("run_simulation", False):
     # Boxplot
     fig, ax = plt.subplots(figsize=(10, 6))
     data = pd.DataFrame({
-        'Vermicompostagem': reducao_vermi_t,
-        'Compostagem': reducao_thermo_t
+        'Vermicompostagem': reducao_vermi_flat,
+        'Compostagem': reducao_thermo_flat
     })
     sns.boxplot(data=data, ax=ax)
     ax.set_title('Distribuição das Emissões Evitadas')
@@ -329,7 +335,7 @@ if st.session_state.get("run_simulation", False):
     
     # Histograma das diferenças
     fig, ax = plt.subplots(figsize=(10, 6))
-    diferencas = reducao_vermi_t - reducao_thermo_t
+    diferencas = reducao_vermi_flat - reducao_thermo_flat
     sns.histplot(diferencas, bins=30, kde=True, ax=ax)
     ax.set_xlabel('Diferença de Redução (Vermicompostagem - Compostagem) em tCO₂eq')
     ax.set_ylabel('Frequência')
