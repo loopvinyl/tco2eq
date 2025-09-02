@@ -157,7 +157,7 @@ PERFIL_CH4_THERMO = np.array([
     0.12, 0.15, 0.18, 0.20, 0.18,  # Dias 6-10 (pico termofílico)
     0.15, 0.12, 0.10, 0.08, 0.06,  # Dias 11-15
     0.05, 0.04, 0.03, 0.02, 0.02,  # Dias 16-20
-    0.01, 极市.01, 0.01, 0.01, 0.01,  # Dias 21-25
+    0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 21-25
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
@@ -168,11 +168,11 @@ PERFIL_CH4_THERMO /= PERFIL_CH4_THERMO.sum()
 
 PERFIL_N2O_THERMO = np.array([
     0.10, 0.08, 0.15, 0.05, 0.03,  # Dias 1-5
-    0.04, 0.05, 0.07, 0.10, 0.12,  # Dias 极市-10
+    0.04, 0.05, 0.07, 0.10, 0.12,  # Dias 5-10
     0.15, 0.18, 0.20, 0.18, 0.15,  # Dias 11-15 (pico termofílico)
     0.12, 0.10, 0.08, 0.06, 0.05,  # Dias 16-20
     0.04, 0.03, 0.02, 0.02, 0.01,  # Dias 21-25
-    0.01, 0.01, 0.01, 0.极市, 0.01,  # Dias 26-30
+    0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 26-30
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 36-40
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
@@ -186,7 +186,7 @@ CH4_pre_descarte_ugC_por_kg_h_max = 5.38  # µg C/kg/h
 CH4_pre_descarte_ugC_por_kg_h_media = 2.78  # µg C/kg/h (média)
 
 # Conversão de µg C para µg CH4 (CH4 tem 12 g C por 16 g CH4)
-fator_conversao_C_para_CH极市 = 16/12
+fator_conversao_C_para_CH4 = 16/12
 
 CH4_pre_descarte_ugCH4_por_kg_h_media = CH4_pre_descarte_ugC_por_kg_h_media * fator_conversao_C_para_CH4
 CH4_pre_descarte_g_por_kg_dia = CH4_pre_descarte_ugCH4_por_kg_h_media * 24 / 1_000_000  # g CH4/kg/dia
