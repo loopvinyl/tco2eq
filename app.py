@@ -3,17 +3,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
-import os
-from docx import Document
-from docx.shared import Inches
-from SALib.sample.sobol import sample
-from SALib.analyze.sobol import analyze
 import seaborn as sns
 from scipy import stats
 from scipy.signal import fftconvolve
 from joblib import Parallel, delayed
 import warnings
 from matplotlib.ticker import FuncFormatter
+from SALib.sample.sobol import sample
+from SALib.analyze.sobol import analyze
 
 # =============================================
 # 0. CONFIGURAÇÕES INICIAIS
