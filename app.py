@@ -173,7 +173,7 @@ N2O_N_FRAC_THERMO = 0.0196  # 1.96% do nitrogênio inicial perdido como N2O-N
 
 # Perfil temporal de emissões para compostagem termofílica (baseado na Figura 2)
 PERFIL_CH4_THERMO = np.array([
-    0.01, 0.02, 0.极, 0.05, 0.08,  # Dias 1-5
+    0.01, 0.02, 0.03, 0.05, 0.08,  # Dias 1-5
     0.12, 0.15, 0.18, 0.20, 0.18,  # Dias 6-10 (pico termofílico)
     0.15, 0.12, 0.10, 0.08, 0.06,  # Dias 11-15
     0.05, 0.04, 0.03, 0.02, 0.02,  # Dias 16-20
