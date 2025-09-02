@@ -118,6 +118,35 @@ CH4_C_FRAC_YANG = 0.13 / 100  # Fração do TOC emitida como CH4-C
 N2O_N_FRAC_YANG = 0.92 / 100  # Fração do TN emitida como N2O-N
 DIAS_COMPOSTAGEM = 50  # Período total de compostagem
 
+# Perfil temporal de emissões baseado em Yang et al. (2017)
+PERFIL_CH4_VERMI = np.array([
+    0.02, 0.02, 0.02, 0.03, 0.03,  # Dias 1-5
+    0.04, 0.04, 0.05, 0.05, 0.06,  # Dias 6-10
+    0.07, 0.08, 0.09, 0.10, 0.09,  # Dias 11-15
+    0.08, 0.07, 0.06, 0.05, 0.04,  # Dias 16-20
+    0.03, 0.02, 0.02, 极, 0.01,  # Dias 21-25
+    0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 26-30
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
+    极, 0.005, 0.005, 0.005, 0.005,  # Dias 36-40
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+])
+PERFIL_CH4_VERMI /= PERFIL_CH4_VERMI.sum()  # Normalizar para soma=1
+
+PERFIL_N2O_VERMI = np.array([
+    0.15, 0.10, 0.20, 0.05, 0.03,  # Dias 1-5 (pico no dia 3)
+    0.03, 0.03, 0.04, 0.05, 0.06,  # Dias 6-10
+    0.08, 0.09, 0.10, 0.08, 0.07,  # Dias 11-15
+    0.06, 0.05, 0.04, 0.03, 0.02,  # Dias 16-20
+    0.01, 0.01, 0.005, 0.005, 0.005,  # Dias 21-25
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+])
+PERFIL_N2O_VERMI /= PERFIL_N2O_VERMI.sum()  # Normalizar para soma=1
+
 # Emissões pré-descarte (Feng et al. 2020)
 CH4_pre_descarte_ugC_por_kg_h_media = 2.78  # µg C/kg/h (média)
 fator_conversao_C_para_CH4 = 16/12
@@ -138,11 +167,38 @@ GWP_N2O_20 = 273
 # Perfil temporal N2O (Wang et al. 2017)
 PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
-# Fatores de emissão baseados em Zhu-Barker et al. (2017)
-EF_CH4_COMPOST_MEDIA = 0.000546816  # kg CH4 / kg WW / dia
-EF_CH4_COMPOST_DP = 0.000500  # kg CH4 / kg WW / dia
-EF_N2O_COMPOST_MEDIA = 0.000742912   # kg N2O / kg WW / dia
-EF_N2O_COMPOST_DP = 0.000569  # kg N2O / kg WW / dia
+# Valores específicos para compostagem termofílica (Yang et al. 2017)
+CH4_C_FRAC_THERMO = 0.006  # 0.6% do carbono inicial perdido como CH4-C
+N2O_N_FRAC_THERMO = 0.0196  # 1.96% do nitrogênio inicial perdido como N2O-N
+
+# Perfil temporal de emissões para compostagem termofílica (baseado na Figura 2)
+PERFIL_CH4_THERMO = np.array([
+    0.01, 0.02, 0.极, 0.05, 0.08,  # Dias 1-5
+    0.12, 0.15, 0.18, 0.20, 0.18,  # Dias 6-10 (pico termofílico)
+    0.15, 0.12, 0.10, 0.08, 0.06,  # Dias 11-15
+    0.05, 0.04, 0.03, 0.02, 0.02,  # Dias 16-20
+    0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 21-25
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+])
+PERFIL_CH4_THERMO /= PERFIL_CH4_THERMO.sum()
+
+PERFIL_N2O_THERMO = np.array([
+    0.10, 0.08, 0.15, 0.05, 0.03,  # Dias 极-5
+    0.04, 0.05, 0.07, 0.10, 0.12,  # Dias 6-10
+    0.15, 0.18, 0.20, 0.18, 0.15,  # Dias 11-15 (pico termofílico)
+    0.12, 0.10, 0.08, 0.06, 0.05,  # Dias 16-20
+    0.04, 0.03, 0.02, 0.02, 0.01,  # Dias 21-25
+    0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 26-30
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 36-40
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+])
+PERFIL_N2O_THERMO /= PERFIL_N2O_THERMO.sum()
 
 # Período de Simulação
 dias = anos_simulacao * 365
@@ -182,7 +238,7 @@ def calcular_emissoes_pre_descarte(O2_concentracao, dias_simulacao=dias):
 
     return emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg
 
-def calcular_emissoes_aterro(params, dias_simulacao=dias):
+def calcular_emissoes_aterro(params, dias_simulacao=dias, incluir_pre_descarte=True):
     umidade_val, temp_val, doc_val, massa_exp_val, k_ano_val = params
 
     fator_umid = (1 - umidade_val) / (1 - 0.55)
@@ -202,13 +258,17 @@ def calcular_emissoes_aterro(params, dias_simulacao=dias):
     E_fechado = 2.15
     E_medio = f_aberto * E_aberto + (1 - f_aberto) * E_fechado
     E_medio_ajust = E_medio * fator_umid
-    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_000_000) * residuos_kg_dia
+    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_极_000_000) * residuos_kg_dia
 
     kernel_n2o = np.array([PERFIL_N2O.get(d, 0) for d in range(1, 6)], dtype=float)
-    emissoes_N2O = fftconvolve(np.full(dias_simulacao, emissao_diaria_N2O), kernel_n2o, mode='full')[:dias_simulacao]
+    emissoes_N2O = f极convolve(np.full(dias_simulacao, emissao_diaria_N2O), kernel_n2o, mode='full')[:dias_simulacao]
 
-    O2_concentracao = 21
-    emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg = calcular_emissoes_pre_descarte(O2_concentracao, dias_simulacao)
+    if incluir_pre_descarte:
+        O2_concentracao = 21
+        emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg = calcular_emissoes_pre_descarte(O2_concentracao, dias_simulacao)
+    else:
+        emissoes_CH4_pre_descarte_kg = np.zeros(dias_simulacao)
+        emissoes_N2O_pre_descarte_kg = np.zeros(dias_simulacao)
 
     total_ch4_aterro_kg = emissoes_CH4 + emissoes_CH4_pre_descarte_kg
     total_n2o_aterro_kg = emissoes_N2O + emissoes_N2O_pre_descarte_kg
@@ -218,56 +278,46 @@ def calcular_emissoes_aterro(params, dias_simulacao=dias):
 def calcular_emissoes_vermi(params, dias_simulacao=dias):
     umidade_val, temp_val, doc_val, ch4_frac, n2o_frac = params
     fracao_ms = 1 - umidade_val
-    dias_comp = DIAS_COMPOSTAGEM
     
+    # Cálculo das emissões totais por lote (baseado em Yang et al. 2017)
     ch4_total_por_lote = residuos_kg_dia * (TOC_YANG * ch4_frac * (16/12) * fracao_ms)
     n2o_total_por_lote = residuos_kg_dia * (TN_YANG * n2o_frac * (44/28) * fracao_ms)
-    
-    emissao_diaria_por_lote_ch4 = ch4_total_por_lote / dias_comp
-    emissao_diaria_por_lote_n2o = n2o_total_por_lote / dias_comp
-    
+
+    # Inicializar arrays de emissão
     emissoes_CH4 = np.zeros(dias_simulacao)
-    emissoes_N2O = np.zeros(dias_simulacao)
-    
+    emissoes_N2O =极zeros(dias_simulacao)
+
+    # Para cada día de entrada de resíduos
     for dia_entrada in range(dias_simulacao):
-        for dia_compostagem in range(dias_comp):
+        # Distribuir emissões según perfil temporal
+        for dia_compostagem in range(len(PERFIL_CH4_VERMI)):
             dia_emissao = dia_entrada + dia_compostagem
             if dia_emissao < dias_simulacao:
-                emissoes_CH4[dia_emissao] += emissao_diaria_por_lote_ch4
-                emissoes_N2O[dia_emissao] += emissao_diaria_por_lote_n2o
-                
+                emissoes_CH4[dia_emissao] += ch4_total_por_lote * PERFIL_CH4_VERMI[dia_compostagem]
+                emissoes_N2O[dia_emissao] += n2o_total_por_lote * PERFIL_N2O_VERMI[dia_compostagem]
+
     return emissoes_CH4, emissoes_N2O
 
-def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=62, use_random=False):
+def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=62):
     umidade, T, DOC, k_ano = params
-
-    if use_random:
-        # Para análises de incerteza - amostragem aleatória
-        ef_ch4 = np.random.normal(EF_CH4_COMPOST_MEDIA, EF_CH4_COMPOST_DP)
-        ef_n2o = np.random.normal(EF_N2O_COMPOST_MEDIA, EF_N2O_COMPOST_DP)
-    else:
-        # Para simulação base - valores fixos (médias)
-        ef_ch4 = EF_CH4_COMPOST_MEDIA
-        ef_n2o = EF_N2O_COMPOST_MEDIA
-
-    # CORREÇÃO APLICADA: Os fatores de emissão são TOTAIS, não diários
-    # Devemos dividir esses valores totais pela quantidade de dias de compostagem
-    emissao_total_por_lote_ch4 = residuos_kg_dia * ef_ch4
-    emissao_total_por_lote_n2o = residuos_kg_dia * ef_n2o
+    fracao_ms = 1 - umidade
     
-    # Emissão diária por lote
-    emissao_diaria_por_lote_ch4 = emissao_total_por_lote_ch4 / dias_compostagem
-    emissao_diaria_por_lote_n2o = emissao_total_por_lote_n2o / dias_compostagem
+    # Cálculo das emissões totais por lote (baseado em Yang et al. 2017)
+    ch4_total_por_lote = residuos_kg_dia * (TOC_YANG * CH4_C_FRAC_THERMO * (16/12) * fracao_ms)
+    n2o_total_por_lote = residuos_kg_dia * (TN_YANG * N2O_N_FRAC_THERMO * (44/28) * fracao_ms)
 
+    # Inicializar arrays de emissão
     emissoes_CH4 = np.zeros(dias_simulacao)
     emissoes_N2O = np.zeros(dias_simulacao)
 
+    # Para cada día de entrada de resíduos
     for dia_entrada in range(dias_simulacao):
-        for dia_comp in range(dias_compostagem):
-            dia_emissao = dia_entrada + dia_comp
+        # Distribuir emissões según perfil temporal específico
+        for dia_compostagem in range(len(PERFIL_CH4_THERMO)):
+            dia_emissao = dia_entrada + dia_compostagem
             if dia_emissao < dias_simulacao:
-                emissoes_CH4[dia_emissao] += emissao_diaria_por_lote_ch4
-                emissoes_N2O[dia_emissao] += emissao_diaria_por_lote_n2o
+                emissoes_CH4[dia_emissao] += ch4_total_por_lote * PERFIL_CH4_THERMO[dia_compostagem]
+                emissoes_N2O[dia_emissao] += n2o_total_por_lote * PERFIL_N2O_THERMO[dia_compostagem]
 
     return emissoes_CH4, emissoes_N2O
 
@@ -288,14 +338,13 @@ def executar_simulacao_completa(parametros):
 def executar_simulacao_unfccc(parametros):
     umidade, T, DOC, k_ano = parametros
 
+    # Cenário de linha de base (Aterro) - não inclui pré-descarte
     params_aterro = (umidade, T, DOC, 100, k_ano)
-    ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
+    ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro, incluir_pre_descarte=False)
     total_aterro_tco2eq = (ch4_aterro * GWP_CH4_20 + n2o_aterro * GWP_N2O_20) / 1000
 
-    # Para análises de incerteza - usar amostragem aleatória
-    ch4_compost, n2o_compost = calcular_emissoes_compostagem(
-        parametros, dias_simulacao=dias, dias_compostagem=62, use_random=True
-    )
+    # Cenário de projeto (Compostagem) - com acumulação de lotes por 62 dias
+    ch4_compost, n2o_compost = calcular_emissoes_compostagem(parametros, dias_simulacao=dias, dias_compostagem=62)
     total_compost_tco2eq = (ch4_compost * GWP_CH4_20 + n2o_compost * GWP_N2O_20) / 1000
 
     reducao_tco2eq = total_aterro_tco2eq.sum() - total_compost_tco2eq.sum()
@@ -308,8 +357,13 @@ if st.session_state.get('run_simulation', False):
         params_base_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
         params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)
 
-        ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base_aterro)
+        # Para a proposta da tese (inclui pré-descarte)
+        ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base_aterro, incluir_pre_descarte=True)
         ch4_vermi_dia, n2o_vermi_dia = calcular_emissoes_vermi(params_base_vermi)
+
+        # Para o cenário UNFCCC (não inclui pré-descarte)
+        ch4_aterro_unfccc, n2o_aterro_unfccc = calcular_emissoes_aterro(params_base_aterro, incluir_pre_descarte=False)
+        ch4_compost_unfccc, n2o_compost_unfccc = calcular_emissoes_compostagem((umidade, T, DOC, k_ano))
 
         # Construir DataFrame
         df = pd.DataFrame({
@@ -324,7 +378,7 @@ if st.session_state.get('run_simulation', False):
             df[f'{gas}_tCO2eq'] = df[f'{gas}_kg_dia'] * (GWP_CH4_20 if 'CH4' in gas else GWP_N2O_20) / 1000
 
         df['Total_Aterro_tCO2eq_dia'] = df['CH4_Aterro_tCO2eq'] + df['N2O_Aterro_tCO2eq']
-        df['Total_Vermi_tCO2eq_dia'] = df['CH4_Vermi_tCO2eq'] + df['N2O_Vermi_tCO2eq']
+        df['Total_Vermi_tCO2eq_dia'] = df['CH4_Vermi_tCO极'] + df['N2O_Vermi_tCO2eq']
 
         df['Total_Aterro_tCO2eq_acum'] = df['Total_Aterro_tCO2eq_dia'].cumsum()
         df['Total_Vermi_tCO2eq_acum'] = df['Total_Vermi_tCO2eq_dia'].cumsum()
@@ -334,7 +388,7 @@ if st.session_state.get('run_simulation', False):
         df['Year'] = df['Data'].dt.year
         df_anual_revisado = df.groupby('Year').agg({
             'Total_Aterro_tCO2eq_dia': 'sum',
-            'Total_Vermi_tCO2eq_dia': 'sum',
+            'Total_Verm极_tCO2eq_dia': 'sum',
         }).reset_index()
 
         df_anual_revisado['Emission reductions (t CO₂eq)'] = df_anual_revisado['Total_Aterro_tCO2eq_dia'] - df_anual_revisado['Total_Vermi_tCO2eq_dia']
@@ -348,7 +402,7 @@ if st.session_state.get('run_simulation', False):
         # Cenário UNFCCC - usar valores fixos para simulação base
         params_base_unfccc = (umidade, T, DOC, k_ano)
         ch4_compost_UNFCCC, n2o_compost_UNFCCC = calcular_emissoes_compostagem(
-            params_base_unfccc, dias_simulacao=dias, dias_compostagem=62, use_random=False
+            params_base_unfccc, dias_simulacao=dias, dias_compostagem=62
         )
         ch4_compost_unfccc_tco2eq = ch4_compost_UNFCCC * GWP_CH4_20 / 1000
         n2o_compost_unfccc_tco2eq = n2o_compost_UNFCCC * GWP_N2O_20 / 1000
@@ -380,7 +434,7 @@ if st.session_state.get('run_simulation', False):
             total_evitado_tese = df['Reducao_tCO2eq_acum'].iloc[-1]
             st.metric("Total de emissões evitadas (Tese)", f"{formatar_br(total_evitado_tese)} tCO₂eq")
         with col2:
-            total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
+            total_极itado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
             st.metric("Total de emissões evitadas (UNFCCC)", f"{formatar_br(total_evitado_unfccc)} tCO₂eq")
 
         # Gráfico comparativo
@@ -525,7 +579,7 @@ if st.session_state.get('run_simulation', False):
         media_tese = np.mean(results_array_tese)
         intervalo_95_tese = np.percentile(results_array_tese, [2.5, 97.5])
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(f极size=(10, 6))
         sns.histplot(results_array_tese, kde=True, bins=30, color='skyblue', ax=ax)
         ax.axvline(media_tese, color='red', linestyle='--', label=f'Média: {formatar_br(media_tese)} tCO₂eq')
         ax.axvline(intervalo_95_tese[0], color='green', linestyle=':', label='IC 95%')
@@ -551,7 +605,7 @@ if st.session_state.get('run_simulation', False):
 
         params_unfccc = gerar_parametros_mc_unfccc(n_simulations)
         results_mc_unfccc = Parallel(n_jobs=-1)(delayed(executar_simulacao_unfccc)([
-            params_unfccc[0][i], params_unfccc[1][i], params_unfccc[2][i], params_unfccc[3][i]
+            params_unfccc[0][i], params_unfccc[1][极], params_unfccc[2][i], params_unfccc[3][i]
         ]) for i in range(n_simulations))
 
         results_array_unfccc = np.array(results_mc_unfccc)
@@ -633,5 +687,5 @@ st.markdown("""
 
 **Cenário UNFCCC (Compostagem):**
 - UNFCCC (2012). AMS-III.F - Methodology for compostage.
-- Zhu-Barker et al. (2017). Greenhouse gas emissions from composting.
+- Yang et al. (2017). Greenhouse gas emissions from thermophilic composting.
 """)
