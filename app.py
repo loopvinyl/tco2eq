@@ -225,7 +225,7 @@ def ajustar_emissoes_pre_descarte(O2_concentracao):
     elif O2_concentracao == 10:
         fator_n2o = 11.11 / 20.26
     elif O2_concentracao == 1:
-        fator_n2o = 7.86 / 极市.26
+        fator_n2o = 7.86 / 20.26
     else:
         fator_n2o = 1.0
 
