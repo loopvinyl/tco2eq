@@ -419,6 +419,34 @@ if st.session_state.get('run_simulation', False):
             total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
             st.metric("Total de emissões evitadas (UNFCCC)", f"{formatar_br(total_evitado_unfccc)} tCO₂eq")
 
+        # Gráficos de distribuição das emissões (adicionados)
+        st.subheader("Distribuição das Emissões Diárias - Proposta da Tese")
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Gráfico de CH4
+        ax1.plot(df['Data'], df['CH4_Aterro_kg_dia'], 'r-', label='Aterro', alpha=0.7)
+        ax1.plot(df['Data'], df['CH4_Vermi_kg_dia'], 'g-', label='Vermicompostagem', alpha=0.7)
+        ax1.set_title('Emissões Diárias de CH4')
+        ax1.set_xlabel('Data')
+        ax1.set_ylabel('CH4 (kg/dia)')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        ax1.tick_params(axis='x', rotation=45)
+        
+        # Gráfico de N2O
+        ax2.plot(df['Data'], df['N2O_Aterro_kg_dia'], 'r-', label='Aterro', alpha=0.7)
+        ax2.plot(df['Data'], df['N2O_Vermi_kg_dia'], 'g-', label='Vermicompostagem', alpha=0.7)
+        ax2.set_title('Emissões Diárias de N2O')
+        ax2.set_xlabel('Data')
+        ax2.set_ylabel('N2O (kg/dia)')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        ax2.tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+
         # Gráfico comparativo
         st.subheader("Comparação Anual das Emissões Evitadas")
         df_evitadas_anual = pd.DataFrame({
