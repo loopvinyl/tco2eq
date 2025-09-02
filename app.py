@@ -258,7 +258,7 @@ def calcular_emissoes_aterro(params, dias_simulacao=dias, incluir_pre_descarte=T
     E_fechado = 2.15
     E_medio = f_aberto * E_aberto + (1 - f_aberto) * E_fechado
     E_medio_ajust = E_medio * fator_umid
-    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_极_000_000) * residuos_kg_dia
+    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_000_000) * residuos_kg_dia
 
     kernel_n2o = np.array([PERFIL_N2O.get(d, 0) for d in range(1, 6)], dtype=float)
     emissoes_N2O = f极convolve(np.full(dias_simulacao, emissao_diaria_N2O), kernel_n2o, mode='full')[:dias_simulacao]
