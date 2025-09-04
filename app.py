@@ -11,7 +11,6 @@ import warnings
 from matplotlib.ticker import FuncFormatter
 from SALib.sample.sobol import sample
 from SALib.analyze.sobol import analyze
-from st_on_click_stream import OnClickStream
 
 np.random.seed(50)  # Garante reprodutibilidade
 
