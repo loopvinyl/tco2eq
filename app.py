@@ -418,55 +418,42 @@ if st.session_state.get('run_simulation', False):
             total_evitado_unfccc = df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'].iloc[-1]
             st.metric("Total de emissões evitadas (UNFCCC)", f"{formatar_br(total_evitado_unfccc)} tCO₂eq")
 
-
-
         # Gráfico comparativo
-st.subheader("Comparação Anual das Emissões Evitadas")
-df_evitadas_anual = pd.DataFrame({
-    'Year': df_anual_revisado['Year'],
-    'Proposta da Tese': df_anual_revisado['Emission reductions (t CO₂eq)'],
-    'UNFCCC (2012)': df_comp_anual_revisado['Emission reductions (t CO₂eq)']
-})
+        st.subheader("Comparação Anual das Emissões Evitadas")
+        df_evitadas_anual = pd.DataFrame({
+            'Year': df_anual_revisado['Year'],
+            'Proposta da Tese': df_anual_revisado['Emission reductions (t CO₂eq)'],
+            'UNFCCC (2012)': df_comp_anual_revisado['Emission reductions (t CO₂eq)']
+        })
 
-fig, ax = plt.subplots(figsize=(12, 6))
-br_formatter = FuncFormatter(br_format)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        br_formatter = FuncFormatter(br_format)
+        x = np.arange(len(df_evitadas_anual['Year']))
+        bar_width = 0.35
 
-# Converter anos para datetime para ter eixo contínuo
-df_evitadas_anual['Year_dt'] = pd.to_datetime(df_evitadas_anual['Year'], format='%Y')
+        ax.bar(x - bar_width/2, df_evitadas_anual['Proposta da Tese'], width=bar_width,
+                label='Proposta da Tese', edgecolor='black')
+        ax.bar(x + bar_width/2, df_evitadas_anual['UNFCCC (2012)'], width=bar_width,
+                label='UNFCCC (2012)', edgecolor='black', hatch='//')
 
-# Posições das barras
-x = df_evitadas_anual['Year_dt']
-bar_width = 200  # Largura das barras em dias
+        # Adicionar valores formatados em cima das barras
+        for i, (v1, v2) in enumerate(zip(df_evitadas_anual['Proposta da Tese'], 
+                                         df_evitadas_anual['UNFCCC (2012)'])):
+            ax.text(i - bar_width/2, v1 + max(v1, v2)*0.01, 
+                    formatar_br(v1), ha='center', fontsize=9, fontweight='bold')
+            ax.text(i + bar_width/2, v2 + max(v1, v2)*0.01, 
+                    formatar_br(v2), ha='center', fontsize=9, fontweight='bold')
 
-ax.bar(x - pd.Timedelta(days=bar_width/2), df_evitadas_anual['Proposta da Tese'], 
-       width=bar_width, label='Proposta da Tese', edgecolor='black')
-ax.bar(x + pd.Timedelta(days=bar_width/2), df_evitadas_anual['UNFCCC (2012)'], 
-       width=bar_width, label='UNFCCC (2012)', edgecolor='black', hatch='//')
+        ax.set_xlabel('Ano')
+        ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
+        ax.set_title('Comparação Anual das Emissões Evitadas: Proposta da Tese vs UNFCCC (2012)')
+        ax.set_xticks(x)
+        ax.set_xticklabels(df_evitadas_anual['Year'])
+        ax.legend(title='Metodologia')
+        ax.yaxis.set_major_formatter(br_formatter)
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
 
-# Formatar eixo x como anos
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-ax.xaxis.set_major_locator(mdates.YearLocator(1))  # Mostrar todos os anos
-
-# Adicionar valores formatados em cima das barras
-for i, (year, v1, v2) in enumerate(zip(df_evitadas_anual['Year'], 
-                                     df_evitadas_anual['Proposta da Tese'], 
-                                     df_evitadas_anual['UNFCCC (2012)'])):
-    ax.text(pd.to_datetime(str(year)), v1 + max(v1, v2)*0.01, 
-            formatar_br(v1), ha='center', fontsize=8, fontweight='bold')
-    ax.text(pd.to_datetime(str(year)), v2 + max(v1, v2)*0.01, 
-            formatar_br(v2), ha='center', fontsize=8, fontweight='bold')
-
-ax.set_xlabel('Ano')
-ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
-ax.set_title('Comparação Anual das Emissões Evitadas: Proposta da Tese vs UNFCCC (2012)')
-ax.legend(title='Metodologia')
-ax.yaxis.set_major_formatter(br_formatter)
-ax.grid(axis='y', linestyle='--', alpha=0.7)
-
-# Rotacionar labels do eixo x para melhor legibilidade
-plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
-
-st.pyplot(fig)
+        st.pyplot(fig)
 
         # Gráfico de redução acumulada
         st.subheader("Redução de Emissões Acumulada")
