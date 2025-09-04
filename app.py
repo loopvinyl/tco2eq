@@ -12,6 +12,8 @@ from matplotlib.ticker import FuncFormatter
 from SALib.sample.sobol import sample
 from SALib.analyze.sobol import analyze
 
+np.random.seed(50)  # Garante reprodutibilidade
+
 # Configurações iniciais
 st.set_page_config(page_title="Simulador de Emissões CO₂eq", layout="wide")
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -471,6 +473,8 @@ if st.session_state.get('run_simulation', False):
 
         # Análise de Sensibilidade Global (Sobol) - PROPOSTA DA TESE
         st.subheader("Análise de Sensibilidade Global (Sobol) - Proposta da Tese")
+
+        np.random.seed(50)  
         
         problem_tese = {
             'num_vars': 3,
@@ -502,6 +506,8 @@ if st.session_state.get('run_simulation', False):
 
         # Análise de Sensibilidade Global (Sobol) - CENÁRIO UNFCCC
         st.subheader("Análise de Sensibilidade Global (Sobol) - Cenário UNFCCC")
+
+        np.random.seed(50)
         
         problem_unfccc = {
             'num_vars': 3,
@@ -533,8 +539,10 @@ if st.session_state.get('run_simulation', False):
 
         # Análise de Incerteza (Monte Carlo) - PROPOSTA DA TESE
         st.subheader("Análise de Incerteza (Monte Carlo) - Proposta da Tese")
+
         
         def gerar_parametros_mc_tese(n):
+            np.random.seed(50)
             umidade_vals = np.random.uniform(0.75, 0.90, n)
             temp_vals = np.random.normal(25, 3, n)
             doc_vals = np.random.triangular(0.12, 0.15, 0.18, n)
@@ -569,6 +577,7 @@ if st.session_state.get('run_simulation', False):
         st.subheader("Análise de Incerteza (Monte Carlo) - Cenário UNFCCC")
         
         def gerar_parametros_mc_unfccc(n):
+            np.random.seed(50)
             umidade_vals = np.random.uniform(0.75, 0.90, n)
             temp_vals = np.random.normal(25, 3, n)
             doc_vals = np.random.triangular(0.12, 0.15, 0.18, n)
