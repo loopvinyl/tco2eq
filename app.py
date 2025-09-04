@@ -187,7 +187,7 @@ PERFIL_CH4_THERMO = np.array([
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
-    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
     0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
 ])
 PERFIL_CH4_THERMO /= PERFIL_CH4_THERMO.sum()
@@ -202,7 +202,7 @@ PERFIL_N2O_THERMO = np.array([
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 36-40
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
-    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+    0.001, 0.001, 0.001, 0.001, 0.001,   # Dias 46-50  <-- Vírgula adicionada aqui
 ])
 PERFIL_N2O_THERMO /= PERFIL_N2O_THERMO.sum()
 
@@ -616,15 +616,15 @@ if st.session_state.get('run_simulation', False):
         # Teste de normalidade para as diferenças
         diferencas = results_array_tese - results_array_unfccc
         _, p_valor_normalidade_diff = stats.normaltest(diferencas)
-        st.write(f"Teste de normalidade das diferenças (p-value): {formatar_br(p_valor_normalidade_diff*100000/100000):.5f}")
+        st.write(f"Teste de normalidade das diferenças (p-value): **{p_valor_normalidade_diff:.5f}**")
 
         # Teste T pareado
         ttest_pareado, p_ttest_pareado = stats.ttest_rel(results_array_tese, results_array_unfccc)
-        st.write(f"Teste T pareado: Estatística t = {formatar_br(ttest_pareado):.5f}, P-valor = {formatar_br(p_ttest_pareado*100000/100000):.5f}")
+        st.write(f"Teste T pareado: Estatística t = **{ttest_pareado:.5f}**, P-valor = **{p_ttest_pareado:.5f}**")
 
         # Teste de Wilcoxon para amostras pareadas
         wilcoxon_stat, p_wilcoxon = stats.wilcoxon(results_array_tese, results_array_unfccc)
-        st.write(f"Teste de Wilcoxon (pareado): Estatística = {formatar_br(wilcoxon_stat):.5f}, P-valor = {formatar_br(p_wilcoxon*100000/100000):.5f}")
+        st.write(f"Teste de Wilcoxon (pareado): Estatística = **{wilcoxon_stat:.5f}**, P-valor = **{p_wilcoxon:.5f}**")
 
         # Tabela de resultados anuais - Proposta da Tese
         st.subheader("Resultados Anuais - Proposta da Tese")
