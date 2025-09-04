@@ -42,17 +42,8 @@ def formatar_br(numero):
     # Arredonda para 2 casas decimais
     numero = round(numero, 2)
     
-    # Separa parte inteira e decimal
-    parte_inteira = int(numero)
-    parte_decimal = round(numero - parte_inteira, 2)
-    
-    # Formata a parte inteira com separadores de milhar
-    parte_inteira_str = f"{parte_inteira:,}".replace(",", ".")
-    
-    # Formata a parte decimal
-    parte_decimal_str = f"{parte_decimal:.2f}"[2:]  # Pega apenas os dois dígitos decimais
-    
-    return f"{parte_inteira_str},{parte_decimal_str}"
+    # Formata como string e substitui o ponto pela vírgula
+    return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # Função de formatação para os gráficos
 def br_format(x, pos):
@@ -64,14 +55,20 @@ def br_format(x, pos):
     
     # Para valores muito pequenos, usa notação científica
     if abs(x) < 0.01:
-        return f"{x:.1e}"
+        return f"{x:.1e}".replace(".", ",")
     
-    # Para valores grandes, formata with separador de milhar
+    # Para valores grandes, formata com separador de milhar
     if abs(x) >= 1000:
         return f"{x:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     # Para valores menores, mostra duas casas decimais
     return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def br_format_5_dec(x, pos):
+    """
+    Função de formatação para eixos de gráficos (padrão brasileiro com 5 decimais)
+    """
+    return f"{x:,.5f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # Sidebar para entrada de parâmetros
 with st.sidebar:
@@ -190,7 +187,7 @@ PERFIL_CH4_THERMO = np.array([
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
-    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 41-45
     0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
 ])
 PERFIL_CH4_THERMO /= PERFIL_CH4_THERMO.sum()
@@ -400,8 +397,8 @@ if st.session_state.get('run_simulation', False):
         }).reset_index()
 
         df_comp_anual_revisado = pd.merge(df_comp_anual_revisado,
-                                         df_anual_revisado[['Year', 'Baseline emissions (t CO₂eq)']],
-                                         on='Year', how='left')
+                                          df_anual_revisado[['Year', 'Baseline emissions (t CO₂eq)']],
+                                          on='Year', how='left')
 
         df_comp_anual_revisado['Emission reductions (t CO₂eq)'] = df_comp_anual_revisado['Baseline emissions (t CO₂eq)'] - df_comp_anual_revisado['Total_Compost_tCO2eq_dia']
         df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'] = df_comp_anual_revisado['Emission reductions (t CO₂eq)'].cumsum()
@@ -447,12 +444,14 @@ if st.session_state.get('run_simulation', False):
         ax.set_xlabel('Ano')
         ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
         ax.set_title('Comparação Anual das Emissões Evitadas: Proposta da Tese vs UNFCCC (2012)')
+        
+        # Ajustar o eixo x para ser igual ao do gráfico de redução acumulada
         ax.set_xticks(x)
-        ax.set_xticklabels(df_evitadas_anual['Year'])
+        ax.set_xticklabels(df_anual_revisado['Year'])
+
         ax.legend(title='Metodologia')
         ax.yaxis.set_major_formatter(br_formatter)
         ax.grid(axis='y', linestyle='--', alpha=0.7)
-
         st.pyplot(fig)
 
         # Gráfico de redução acumulada
@@ -473,6 +472,7 @@ if st.session_state.get('run_simulation', False):
 
         # Análise de Sensibilidade Global (Sobol) - PROPOSTA DA TESE
         st.subheader("Análise de Sensibilidade Global (Sobol) - Proposta da Tese")
+        br_formatter_sobol = FuncFormatter(br_format)
 
         np.random.seed(50)  
         
@@ -502,6 +502,7 @@ if st.session_state.get('run_simulation', False):
         ax.set_xlabel('Índice ST')
         ax.set_ylabel('')
         ax.grid(axis='x', linestyle='--', alpha=0.7)
+        ax.xaxis.set_major_formatter(br_formatter_sobol) # Adiciona formatação ao eixo x
         st.pyplot(fig)
 
         # Análise de Sensibilidade Global (Sobol) - CENÁRIO UNFCCC
@@ -535,6 +536,7 @@ if st.session_state.get('run_simulation', False):
         ax.set_xlabel('Índice ST')
         ax.set_ylabel('')
         ax.grid(axis='x', linestyle='--', alpha=0.7)
+        ax.xaxis.set_major_formatter(br_formatter_sobol) # Adiciona formatação ao eixo x
         st.pyplot(fig)
 
         # Análise de Incerteza (Monte Carlo) - PROPOSTA DA TESE
@@ -614,15 +616,15 @@ if st.session_state.get('run_simulation', False):
         # Teste de normalidade para as diferenças
         diferencas = results_array_tese - results_array_unfccc
         _, p_valor_normalidade_diff = stats.normaltest(diferencas)
-        st.write(f"Teste de normalidade das diferenças (p-value): {p_valor_normalidade_diff:.4f}")
+        st.write(f"Teste de normalidade das diferenças (p-value): {formatar_br(p_valor_normalidade_diff*100000/100000):.5f}")
 
         # Teste T pareado
         ttest_pareado, p_ttest_pareado = stats.ttest_rel(results_array_tese, results_array_unfccc)
-        st.write(f"Teste T pareado: Estatística t = {ttest_pareado:.4f}, P-valor = {p_ttest_pareado:.4f}")
+        st.write(f"Teste T pareado: Estatística t = {formatar_br(ttest_pareado):.5f}, P-valor = {formatar_br(p_ttest_pareado*100000/100000):.5f}")
 
         # Teste de Wilcoxon para amostras pareadas
         wilcoxon_stat, p_wilcoxon = stats.wilcoxon(results_array_tese, results_array_unfccc)
-        st.write(f"Teste de Wilcoxon (pareado): Estatística = {wilcoxon_stat:.4f}, P-valor = {p_wilcoxon:.4f}")
+        st.write(f"Teste de Wilcoxon (pareado): Estatística = {formatar_br(wilcoxon_stat):.5f}, P-valor = {formatar_br(p_wilcoxon*100000/100000):.5f}")
 
         # Tabela de resultados anuais - Proposta da Tese
         st.subheader("Resultados Anuais - Proposta da Tese")
