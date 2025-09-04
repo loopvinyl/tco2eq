@@ -47,6 +47,17 @@ def formatar_br(numero):
         # Formatação para decimais
         return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+
+# Aplicar a formatação brasileira em todas as tabelas:
+# Para cada dataframe exibido com st.dataframe, aplicar:
+df_formatado = df_original.copy()
+for col in df_formatado.columns:
+    if df_formatado[col].dtype in ['float64', 'int64']:
+        df_formatado[col] = df_formatado[col].apply(formatar_br)
+
+# Atualizar as métricas para usar formatação brasileira:
+st.metric("Label", f"{formatar_br(valor)} unidades")
+
 # Função de formatação para os gráficos
 def br_format(x, pos):
     if x == 0:
