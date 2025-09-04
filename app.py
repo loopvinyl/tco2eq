@@ -39,28 +39,23 @@ def formatar_br(numero):
     if pd.isna(numero):
         return "N/A"
     
-    # Arredonda para 2 casas decimais
-    numero = round(numero, 2)
-    
-    # Separa parte inteira e decimal
-    parte_inteira = int(numero)
-    parte_decimal = round(numero - parte_inteira, 2)
-    
-    # Formata a parte inteira com separadores de milhar
-    parte_inteira_str = f"{parte_inteira:,}".replace(",", ".")
-    
-    # Formata a parte decimal
-    parte_decimal_str = f"{parte_decimal:.2f}"[2:]  # Pega apenas os dois dígitos decimais
-    
-    return f"{parte_inteira_str},{parte_decimal_str}"
+    # Verificar se é inteiro ou decimal
+    if numero == int(numero):
+        # Formatação para inteiros
+        return f"{int(numero):,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    else:
+        # Formatação para decimais
+        return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # Função de formatação para os gráficos
 def br_format(x, pos):
-    """
-    Função de formatação para eixos de gráficos (padrão brasileiro)
-    """
     if x == 0:
         return "0"
+    if abs(x) < 0.01:
+        return f"{x:.1e}"
+    if abs(x) >= 1000:
+        return br_format_inteiro(x, pos)
+    return br_format_decimal(x, pos)
     
     # Para valores muito pequenos, usa notação científica
     if abs(x) < 0.01:
