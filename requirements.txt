@@ -6,4 +6,4 @@ seaborn
 scipy
 joblib
 SALib
-st-on-click-stream
+
