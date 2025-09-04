@@ -108,14 +108,14 @@ F = 0.5  # Fração de metano no biogás
 OX = 0.1  # Fator de oxidação
 Ri = 0.0  # Metano recuperado
 
-# Constante de decaimento
+# Constante de decaimento (fixa como no script anexo)
 k_ano = 0.06  # Constante de decaimento anual
 
-# Vermicompostagem (Yang et al. 2017)
+# Vermicompostagem (Yang et al. 2017) - valores fixos
 TOC_YANG = 0.436  # Fração de carbono orgânico total
 TN_YANG = 14.2 / 1000  # Fração de nitrogênio total
-CH4_C_FRAC_YANG = 0.13 / 100  # Fração do TOC emitida como CH4-C
-N2O_N_FRAC_YANG = 0.92 / 100  # Fração do TN emitida como N2O-N
+CH4_C_FRAC_YANG = 0.13 / 100  # Fração do TOC emitida como CH4-C (fixo)
+N2O_N_FRAC_YANG = 0.92 / 100  # Fração do TN emitida como N2O-N (fixo)
 DIAS_COMPOSTAGEM = 50  # Período total de compostagem
 
 # Perfil temporal de emissões baseado em Yang et al. (2017)
@@ -175,9 +175,9 @@ datas = pd.date_range(start=data_inicio, periods=dias, freq='D')
 # Perfil temporal N2O (Wang et al. 2017)
 PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
-# Valores específicos para compostagem termofílica (Yang et al. 2017)
-CH4_C_FRAC_THERMO = 0.006
-N2O_N_FRAC_THERMO = 0.0196
+# Valores específicos para compostagem termofílica (Yang et al. 2017) - valores fixos
+CH4_C_FRAC_THERMO = 0.006  # Fixo
+N2O_N_FRAC_THERMO = 0.0196  # Fixo
 
 PERFIL_CH4_THERMO = np.array([
     0.01, 0.02, 0.03, 0.05, 0.08,  # Dias 1-5
@@ -207,7 +207,7 @@ PERFIL_N2O_THERMO = np.array([
 ])
 PERFIL_N2O_THERMO /= PERFIL_N2O_THERMO.sum()
 
-# Funções de cálculo (adaptadas do código original)
+# Funções de cálculo (adaptadas do script anexo)
 def ajustar_emissoes_pre_descarte(O2_concentracao):
     ch4_ajustado = CH4_pre_descarte_g_por_kg_dia
 
@@ -240,17 +240,17 @@ def calcular_emissoes_pre_descarte(O2_concentracao, dias_simulacao=dias):
     return emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg
 
 def calcular_emissoes_aterro(params, dias_simulacao=dias):
-    umidade_val, temp_val, doc_val, massa_exp_val, k_ano_val = params
+    umidade_val, temp_val, doc_val = params
 
     fator_umid = (1 - umidade_val) / (1 - 0.55)
-    f_aberto = np.clip((massa_exp_val / residuos_kg_dia) * (h_exposta / 24), 0.0, 1.0)
+    f_aberto = np.clip((massa_exposta_kg / residuos_kg_dia) * (h_exposta / 24), 0.0, 1.0)
     docf_calc = 0.0147 * temp_val + 0.28
 
     potencial_CH4_por_kg = doc_val * docf_calc * MCF * F * (16/12) * (1 - Ri) * (1 - OX)
     potencial_CH4_lote_diario = residuos_kg_dia * potencial_CH4_por_kg
 
     t = np.arange(1, dias_simulacao + 1, dtype=float)
-    kernel_ch4 = np.exp(-k_ano_val * (t - 1) / 365.0) - np.exp(-k_ano_val * t / 365.0)
+    kernel_ch4 = np.exp(-k_ano * (t - 1) / 365.0) - np.exp(-k_ano * t / 365.0)
     entradas_diarias = np.ones(dias_simulacao, dtype=float)
     emissoes_CH4 = fftconvolve(entradas_diarias, kernel_ch4, mode='full')[:dias_simulacao]
     emissoes_CH4 *= potencial_CH4_lote_diario
@@ -273,11 +273,12 @@ def calcular_emissoes_aterro(params, dias_simulacao=dias):
     return total_ch4_aterro_kg, total_n2o_aterro_kg
 
 def calcular_emissoes_vermi(params, dias_simulacao=dias):
-    umidade_val, temp_val, doc_val, ch4_frac, n2o_frac = params
+    umidade_val, temp_val, doc_val = params
     fracao_ms = 1 - umidade_val
     
-    ch4_total_por_lote = residuos_kg_dia * (TOC_YANG * ch4_frac * (16/12) * fracao_ms)
-    n2o_total_por_lote = residuos_kg_dia * (TN_YANG * n2o_frac * (44/28) * fracao_ms)
+    # Usando valores fixos para CH4_C_FRAC_YANG e N2O_N_FRAC_YANG
+    ch4_total_por_lote = residuos_kg_dia * (TOC_YANG * CH4_C_FRAC_YANG * (16/12) * fracao_ms)
+    n2o_total_por_lote = residuos_kg_dia * (TN_YANG * N2O_N_FRAC_YANG * (44/28) * fracao_ms)
 
     emissoes_CH4 = np.zeros(dias_simulacao)
     emissoes_N2O = np.zeros(dias_simulacao)
@@ -292,9 +293,10 @@ def calcular_emissoes_vermi(params, dias_simulacao=dias):
     return emissoes_CH4, emissoes_N2O
 
 def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=50):
-    umidade, T, DOC, k_ano = params
+    umidade, T, DOC = params
     fracao_ms = 1 - umidade
     
+    # Usando valores fixos para CH4_C_FRAC_THERMO e N2O_N_FRAC_THERMO
     ch4_total_por_lote = residuos_kg_dia * (TOC_YANG * CH4_C_FRAC_THERMO * (16/12) * fracao_ms)
     n2o_total_por_lote = residuos_kg_dia * (TN_YANG * N2O_N_FRAC_THERMO * (44/28) * fracao_ms)
 
@@ -311,12 +313,10 @@ def calcular_emissoes_compostagem(params, dias_simulacao=dias, dias_compostagem=
     return emissoes_CH4, emissoes_N2O
 
 def executar_simulacao_completa(parametros):
-    umidade, T, DOC, k_ano, CH4_C_FRAC, N2O_N_FRAC = parametros
-    params_aterro = (umidade, T, DOC, 100, k_ano)
-    params_vermi = (umidade, T, DOC, CH4_C_FRAC, N2O_N_FRAC)
-
-    ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
-    ch4_vermi, n2o_vermi = calcular_emissoes_vermi(params_vermi)
+    umidade, T, DOC = parametros
+    
+    ch4_aterro, n2o_aterro = calcular_emissoes_aterro([umidade, T, DOC])
+    ch4_vermi, n2o_vermi = calcular_emissoes_vermi([umidade, T, DOC])
 
     total_aterro_tco2eq = (ch4_aterro * GWP_CH4_20 + n2o_aterro * GWP_N2O_20) / 1000
     total_vermi_tco2eq = (ch4_vermi * GWP_CH4_20 + n2o_vermi * GWP_N2O_20) / 1000
@@ -325,13 +325,12 @@ def executar_simulacao_completa(parametros):
     return reducao_tco2eq
 
 def executar_simulacao_unfccc(parametros):
-    umidade, T, DOC, k_ano = parametros
+    umidade, T, DOC = parametros
 
-    params_aterro = (umidade, T, DOC, 100, k_ano)
-    ch4_aterro, n2o_aterro = calcular_emissoes_aterro(params_aterro)
+    ch4_aterro, n2o_aterro = calcular_emissoes_aterro([umidade, T, DOC])
     total_aterro_tco2eq = (ch4_aterro * GWP_CH4_20 + n2o_aterro * GWP_N2O_20) / 1000
 
-    ch4_compost, n2o_compost = calcular_emissoes_compostagem(parametros, dias_simulacao=dias, dias_compostagem=50)
+    ch4_compost, n2o_compost = calcular_emissoes_compostagem([umidade, T, DOC], dias_simulacao=dias, dias_compostagem=50)
     total_compost_tco2eq = (ch4_compost * GWP_CH4_20 + n2o_compost * GWP_N2O_20) / 1000
 
     reducao_tco2eq = total_aterro_tco2eq.sum() - total_compost_tco2eq.sum()
@@ -341,11 +340,10 @@ def executar_simulacao_unfccc(parametros):
 if st.session_state.get('run_simulation', False):
     with st.spinner('Executando simulação...'):
         # Executar modelo base
-        params_base_aterro = (umidade, T, DOC, massa_exposta_kg, k_ano)
-        params_base_vermi = (umidade, T, DOC, CH4_C_FRAC_YANG, N2O_N_FRAC_YANG)
+        params_base = [umidade, T, DOC]
 
-        ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base_aterro)
-        ch4_vermi_dia, n2o_vermi_dia = calcular_emissoes_vermi(params_base_vermi)
+        ch4_aterro_dia, n2o_aterro_dia = calcular_emissoes_aterro(params_base)
+        ch4_vermi_dia, n2o_vermi_dia = calcular_emissoes_vermi(params_base)
 
         # Construir DataFrame
         df = pd.DataFrame({
@@ -382,9 +380,8 @@ if st.session_state.get('run_simulation', False):
         }, inplace=True)
 
         # Cenário UNFCCC
-        params_base_unfccc = (umidade, T, DOC, k_ano)
         ch4_compost_UNFCCC, n2o_compost_UNFCCC = calcular_emissoes_compostagem(
-            params_base_unfccc, dias_simulacao=dias, dias_compostagem=50
+            params_base, dias_simulacao=dias, dias_compostagem=50
         )
         ch4_compost_unfccc_tco2eq = ch4_compost_UNFCCC * GWP_CH4_20 / 1000
         n2o_compost_unfccc_tco2eq = n2o_compost_UNFCCC * GWP_N2O_20 / 1000
@@ -476,15 +473,12 @@ if st.session_state.get('run_simulation', False):
         st.subheader("Análise de Sensibilidade Global (Sobol) - Proposta da Tese")
         
         problem_tese = {
-            'num_vars': 6,
-            'names': ['umidade_residuos', 'temperatura_media', 'doc', 'k_ano', 'CH4_C_FRAC_YANG', 'N2O_N_FRAC_YANG'],
+            'num_vars': 3,
+            'names': ['umidade', 'T', 'DOC'],
             'bounds': [
-                [0.5, 0.85],         # umidade_residuos
-                [25.0, 45.0],       # temperatura_media
+                [0.5, 0.85],         # umidade
+                [25.0, 45.0],       # temperatura
                 [0.15, 0.50],       # doc
-                [0.01, 0.47],       # k_ano
-                [0.0005, 0.002],    # CH4_C_FRAC_YANG
-                [0.005, 0.015],     # N2O_N_FRAC_YANG
             ]
         }
 
@@ -510,13 +504,12 @@ if st.session_state.get('run_simulation', False):
         st.subheader("Análise de Sensibilidade Global (Sobol) - Cenário UNFCCC")
         
         problem_unfccc = {
-            'num_vars': 4,
-            'names': ['umidade', 'T', 'DOC', 'k_ano'],
+            'num_vars': 3,
+            'names': ['umidade', 'T', 'DOC'],
             'bounds': [
-                [0.5, 0.85],  # Umidade (50-85%)
-                [25, 45],  # Temperatura (25-45°C)
-                [0.15, 0.50],  # DOC (15-50%)
-                [0.01, 0.47]  # k_ano
+                [0.5, 0.85],  # Umidade
+                [25, 45],     # Temperatura
+                [0.15, 0.50], # DOC
             ]
         }
 
@@ -545,17 +538,14 @@ if st.session_state.get('run_simulation', False):
             umidade_vals = np.random.uniform(0.75, 0.90, n)
             temp_vals = np.random.normal(25, 3, n)
             doc_vals = np.random.triangular(0.12, 0.15, 0.18, n)
-            k_ano_vals = np.random.uniform(0.01, 0.47, n)
-            ch4_frac_vals = np.random.lognormal(mean=np.log(0.0013), sigma=0.3, size=n)
-            n2o_frac_vals = np.random.weibull(1.2, n) * 0.01
             
-            return umidade_vals, temp_vals, doc_vals, k_ano_vals, ch4_frac_vals, n2o_frac_vals
+            return umidade_vals, temp_vals, doc_vals
 
-        umidade_vals, temp_vals, doc_vals, k_ano_vals, ch4_frac_vals, n2o_frac_vals = gerar_parametros_mc_tese(n_simulations)
+        umidade_vals, temp_vals, doc_vals = gerar_parametros_mc_tese(n_simulations)
         
         results_mc_tese = []
         for i in range(n_simulations):
-            params_tese = [umidade_vals[i], temp_vals[i], doc_vals[i], k_ano_vals[i], ch4_frac_vals[i], n2o_frac_vals[i]]
+            params_tese = [umidade_vals[i], temp_vals[i], doc_vals[i]]
             results_mc_tese.append(executar_simulacao_completa(params_tese))
 
         results_array_tese = np.array(results_mc_tese)
@@ -582,15 +572,14 @@ if st.session_state.get('run_simulation', False):
             umidade_vals = np.random.uniform(0.75, 0.90, n)
             temp_vals = np.random.normal(25, 3, n)
             doc_vals = np.random.triangular(0.12, 0.15, 0.18, n)
-            k_ano_vals = np.random.uniform(0.01, 0.47, n)
             
-            return umidade_vals, temp_vals, doc_vals, k_ano_vals
+            return umidade_vals, temp_vals, doc_vals
 
-        umidade_vals, temp_vals, doc_vals, k_ano_vals = gerar_parametros_mc_unfccc(n_simulations)
+        umidade_vals, temp_vals, doc_vals = gerar_parametros_mc_unfccc(n_simulations)
         
         results_mc_unfccc = []
         for i in range(n_simulations):
-            params_unfccc = [umidade_vals[i], temp_vals[i], doc_vals[i], k_ano_vals[i]]
+            params_unfccc = [umidade_vals[i], temp_vals[i], doc_vals[i]]
             results_mc_unfccc.append(executar_simulacao_unfccc(params_unfccc))
 
         results_array_unfccc = np.array(results_mc_unfccc)
