@@ -93,12 +93,8 @@ with st.sidebar:
     n_simulations = st.slider("Número de simulações Monte Carlo", 50, 1000, 100, 50)
     n_samples = st.slider("Número de amostras Sobol", 32, 256, 64, 16)
     
-    # Novo botão que recolhe a barra lateral
-    collapse_sidebar = OnClickStream("document.querySelector('button[title=\"Collapse\"]').click()")
-    
     if st.button("Executar Simulação"):
         st.session_state.run_simulation = True
-        collapse_sidebar()
     else:
         st.session_state.run_simulation = False
 
@@ -145,6 +141,7 @@ PERFIL_N2O_VERMI = np.array([
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
     0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
 ])
 PERFIL_N2O_VERMI /= PERFIL_N2O_VERMI.sum()
@@ -187,8 +184,9 @@ PERFIL_CH4_THERMO = np.array([
     0.15, 0.12, 0.10, 0.08, 0.06,  # Dias 11-15
     0.05, 0.04, 0.03, 0.02, 0.02,  # Dias 16-20
     0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 21-25
-    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
-    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 36-40
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
     0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
 ])
@@ -204,16 +202,13 @@ PERFIL_N2O_THERMO = np.array([
     0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
     0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 36-40
     0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
-    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+    0.001, 0.001, 0.001, 0.001, 0.001,   # Dias 46-50
 ])
 PERFIL_N2O_THERMO /= PERFIL_N2O_THERMO.sum()
 
 # Funções de cálculo (adaptadas do script anexo)
 def ajustar_emissoes_pre_descarte(O2_concentracao):
-    ch4_ajustado = CH4_pre_descarte_g_por_kg_h_min + (
-        CH4_pre_descarte_ugC_por_kg_h_max - CH4_pre_descarte_ugC_por_kg_h_min
-    ) * (21 - O2_concentracao) / 20.0
-    ch4_ajustado = ch4_ajustado * (16/12) * 24 / 1_000_000
+    ch4_ajustado = CH4_pre_descarte_g_por_kg_dia
 
     if O2_concentracao == 21:
         fator_n2o = 1.0
@@ -452,7 +447,7 @@ if st.session_state.get('run_simulation', False):
         
         # Ajustar o eixo x para ser igual ao do gráfico de redução acumulada
         ax.set_xticks(x)
-        ax.set_xticklabels(df_anual_revisado['Year'], fontsize=8)
+        ax.set_xticklabels(df_anual_revisado['Year'])
 
         ax.legend(title='Metodologia')
         ax.yaxis.set_major_formatter(br_formatter)
