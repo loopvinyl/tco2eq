@@ -447,7 +447,7 @@ if st.session_state.get('run_simulation', False):
         
         # Ajustar o eixo x para ser igual ao do gráfico de redução acumulada
         ax.set_xticks(x)
-        ax.set_xticklabels(df_anual_revisado['Year'])
+        ax.set_xticklabels(df_anual_revisado['Year'], fontsize=8)
 
         ax.legend(title='Metodologia')
         ax.yaxis.set_major_formatter(br_formatter)
