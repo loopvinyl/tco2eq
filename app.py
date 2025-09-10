@@ -172,13 +172,13 @@ def calculate_compost_emissions(parametros, dias_operacao, context, **kwargs):
 st.sidebar.header("Parâmetros do Projeto")
 # Definir valores padrão
 params_default = {
-    'residuos_ano': 36500.0,  # Corrigido para float
+    'residuos_ano': 36500.0,
     'anos_projeto': 20,
     'fração_organica': 0.5,
     'k_constante': 0.05,
     'L0_fator': 0.15,
     'taxa_N2O': 0.001,
-    'eficiencia_ch4': 0,
+    'eficiencia_ch4': 0.0,  # Corrigido para float
     'fator_CH4': 0.004,
     'fator_N2O': 0.001,
     'GWP_CH4_Tese': 79.7,
