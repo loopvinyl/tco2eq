@@ -78,7 +78,7 @@ with st.sidebar:
     residuos_kg_dia = st.slider("Quantidade de resíduos (kg/dia)", 
                                min_value=10, max_value=1000, value=100, step=10)
     
-    st.subheader("Parâmetros Operacionais")
+    st.subheader("Parámetros Operacionais")
     
     # Umidade com formatação brasileira (0,85 em vez de 0.85)
     umidade_valor = st.slider("Umidade do resíduo", 50, 95, 85, 1)
@@ -406,6 +406,132 @@ if st.session_state.get('run_simulation', False):
 
         # Exibir resultados
         st.header("Resultados da Simulação")
+        
+        # Cálculos para as tabelas explicativas
+        with st.expander("Cálculos Detalhados da Vermicompostagem", expanded=True):
+            st.subheader("Tabela – Cálculo de CH4 e N2O pela vermicompostagem, média diária")
+            
+            # Parâmetros atuais
+            massa_residuos = residuos_kg_dia
+            umidade_atual = umidade
+            materia_seca = massa_residuos * (1 - umidade_atual)
+            TOC = TOC_YANG
+            TN = TN_YANG * 1000  # Convertendo para g/kg
+            
+            # Cálculos
+            massa_C = materia_seca * TOC
+            massa_N = materia_seca * TN
+            emissao_total_CH4_C = massa_C * CH4_C_FRAC_YANG
+            emissao_total_CH4 = emissao_total_CH4_C * (16/12)
+            emissao_media_diaria_CH4 = emissao_total_CH4 / DIAS_COMPOSTAGEM
+            
+            emissao_total_N2O_N = massa_N * N2O_N_FRAC_YANG
+            emissao_total_N2O = emissao_total_N2O_N * (44/28)
+            emissao_media_diaria_N2O = emissao_total_N2O / DIAS_COMPOSTAGEM
+            
+            # Tabela 1
+            tabela1 = pd.DataFrame({
+                'Parâmetro': [
+                    'Massa inicial de resíduos (base úmida)',
+                    'Umidade',
+                    'Matéria Seca (MS)',
+                    'Teor de Carbono Orgânico (TOC)',
+                    'Teor de Nitrogênio Total (TN)',
+                    'Fração do TOC emitida como CH₄-C',
+                    'Fração do TN emitida como N₂O-N',
+                    'Período de compostagem',
+                    'Massa de C inicial',
+                    'Massa de N inicial',
+                    'Emissão total de CH₄-C',
+                    'Emissão total de CH₄ em 50 dias',
+                    'Emissão média diária de CH₄',
+                    'Emissão total de N₂O-N',
+                    'Emissão total de N₂O em 50 dias',
+                    'Emissão média diária de N₂O'
+                ],
+                'Valor': [
+                    massa_residuos,
+                    umidade_atual,
+                    materia_seca,
+                    TOC,
+                    TN,
+                    CH4_C_FRAC_YANG,
+                    N2O_N_FRAC_YANG,
+                    DIAS_COMPOSTAGEM,
+                    massa_C,
+                    massa_N,
+                    emissao_total_CH4_C,
+                    emissao_total_CH4,
+                    emissao_media_diaria_CH4,
+                    emissao_total_N2O_N,
+                    emissao_total_N2O,
+                    emissao_media_diaria_N2O
+                ],
+                'Unidade': [
+                    'kg dia⁻¹',
+                    'fração',
+                    'kg dia⁻¹',
+                    'fração da MS',
+                    'g kg⁻¹ MS',
+                    'fração',
+                    'fração',
+                    'dias',
+                    'kg C',
+                    'kg N',
+                    'kg CH₄-C',
+                    'kg CH₄',
+                    'kg CH₄ dia⁻¹',
+                    'kg N₂O-N',
+                    'kg N₂O',
+                    'kg N₂O dia⁻¹'
+                ]
+            })
+            
+            # Formatar valores
+            tabela1['Valor Formatado'] = tabela1['Valor'].apply(lambda x: formatar_br(x) if isinstance(x, (int, float)) else x)
+            
+            st.table(tabela1[['Parâmetro', 'Valor Formatado', 'Unidade']])
+            
+            st.caption("Fonte: elaborado pelo autor (2025).")
+            
+            st.subheader("Tabela – Conversão de kg para tCO2eq")
+            
+            # Cálculos de conversão
+            emissao_diaria_CH4_tco2eq = emissao_media_diaria_CH4 * GWP_CH4_20 / 1000
+            emissao_diaria_N2O_tco2eq = emissao_media_diaria_N2O * GWP_N2O_20 / 1000
+            emissao_total_diaria_tco2eq = emissao_diaria_CH4_tco2eq + emissao_diaria_N2O_tco2eq
+            
+            # Tabela 2
+            tabela2 = pd.DataFrame({
+                'Parâmetro': [
+                    'Emissão diária CH₄',
+                    'Emissão diária CH₄',
+                    'Emissão diária N₂O',
+                    'Emissão diária N₂O',
+                    'Emissão total diária (CH₄+N₂O)'
+                ],
+                'Valor': [
+                    emissao_media_diaria_CH4,
+                    emissao_diaria_CH4_tco2eq,
+                    emissao_media_diaria_N2O,
+                    emissao_diaria_N2O_tco2eq,
+                    emissao_total_diaria_tco2eq
+                ],
+                'Unidade': [
+                    'kg dia⁻¹',
+                    'tCO₂eq dia⁻¹',
+                    'kg dia⁻¹',
+                    'tCO₂eq dia⁻¹',
+                    'tCO₂eq dia⁻¹'
+                ]
+            })
+            
+            # Formatar valores
+            tabela2['Valor Formatado'] = tabela2['Valor'].apply(lambda x: formatar_br(x) if isinstance(x, (int, float)) else x)
+            
+            st.table(tabela2[['Parâmetro', 'Valor Formatado', 'Unidade']])
+            
+            st.caption("Fonte: elaborado pelo autor (2025).")
         
         col1, col2 = st.columns(2)
         with col1:
