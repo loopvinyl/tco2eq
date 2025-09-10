@@ -15,7 +15,7 @@ from SALib.analyze.sobol import analyze
 np.random.seed(50)  # Garante reprodutibilidade
 
 # Configurações iniciais
-st.set_page_config(page_title="Simulador de Emissões tCO₂eq", layout="wide")
+st.set_page_config(page_title="Simulador de Emissões CO₂eq", layout="wide")
 warnings.filterwarnings("ignore", category=FutureWarning)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
@@ -34,212 +34,353 @@ aterro sanitário vs. vermicompostagem (Contexto: Proposta da Tese) e aterro san
 # Função para formatar números no padrão brasileiro
 def formatar_br(numero):
     """
-    Formata um número para o padrão brasileiro de separadores de milhares e decimais.
-    Ex: 1234.56 -> 1.234,56
+    Formata um número para o padrão brasileiro (separador de milhares como ponto e decimal como vírgula).
     """
-    if pd.isna(numero):
-        return 'N/A'
-    if isinstance(numero, (int, float)):
+    if isinstance(numero, (float, np.float64)):
         return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return str(numero)
+    return numero
 
-# --- Barra lateral ---
+# Função para gerar a série temporal de emissões de CH4 da vermicompostagem
+@st.cache_data(show_spinner=False)
+def get_vermi_ch4_temporal_profile(dias_operacao):
+    """
+    Gera a série temporal de emissões de CH4 da vermicompostagem baseada em Yang et al. (2017).
+    """
+    dias_vermicompostagem = 50
+    pico_dia = 1
+    # Distribuição que simula o perfil de emissão, com pico no início
+    x = np.linspace(-3, 10, dias_vermicompostagem)
+    y = np.exp(-((x - (pico_dia-1)) / 1.5)**2) + np.exp(-((x - (pico_dia-1)) / 10)**2)
+    y_normalizada = y / np.sum(y)
+    
+    # Repete o perfil para todo o período de operação
+    perfil_temporal = np.tile(y_normalizada, int(np.ceil(dias_operacao / dias_vermicompostagem)))[:dias_operacao]
+    
+    return perfil_temporal
+
+# Função para gerar a série temporal de emissões de N2O da vermicompostagem
+@st.cache_data(show_spinner=False)
+def get_vermi_n2o_temporal_profile(dias_operacao):
+    """
+    Gera a série temporal de emissões de N2O da vermicompostagem baseada em Yang et al. (2017).
+    """
+    dias_vermicompostagem = 50
+    pico_dia = 3
+    # Distribuição que simula o perfil de emissão, com pico no terceiro dia
+    x = np.arange(dias_vermicompostagem)
+    # Pico no dia 3
+    y = np.exp(-0.2 * (x - pico_dia)**2) + 0.1 * np.exp(-0.05 * (x - pico_dia)**2)
+    y_normalizada = y / np.sum(y)
+    
+    # Repete o perfil para todo o período de operação
+    perfil_temporal = np.tile(y_normalizada, int(np.ceil(dias_operacao / dias_vermicompostagem)))[:dias_operacao]
+    
+    return perfil_temporal
+
+# Funções de cálculo de emissões
+@st.cache_data(show_spinner=False)
+def calculate_landfill_emissions(parametros, dias_operacao, **kwargs):
+    """
+    Calcula as emissões de metano do aterro sanitário ao longo do tempo.
+    """
+    
+    # Desempacotar os parâmetros
+    residuos_ano = parametros.get('residuos_ano', 0)
+    fração_organica = parametros.get('fração_organica', 0)
+    k_constante = parametros.get('k_constante', 0)
+    taxa_N2O = parametros.get('taxa_N2O', 0)
+    eficiencia_ch4 = parametros.get('eficiencia_ch4', 0)
+    L0_fator = parametros.get('L0_fator', 0)
+    GWP_CH4_Tese = parametros.get('GWP_CH4_Tese', 0)
+    GWP_N2O_Tese = parametros.get('GWP_N2O_Tese', 0)
+
+    # Conversão de unidades
+    emissao_anual_toneladas = residuos_ano * fração_organica
+    emissao_diaria_kg = (emissao_anual_toneladas * 1000) / 365
+    
+    # Emissões de CH4
+    emissao_diaria_ch4 = emissao_diaria_kg * L0_fator * k_constante
+    decay_series = np.exp(-k_constante * np.arange(dias_operacao))
+    emissao_ch4_dia_kg = fftconvolve(np.ones(dias_operacao) * emissao_diaria_ch4, decay_series, 'full')[:dias_operacao]
+
+    # Emissões de N2O
+    emissao_n2o_dia_kg = np.ones(dias_operacao) * taxa_N2O
+
+    # Total em tCO2eq
+    emissao_ch4_tco2eq = (emissao_ch4_dia_kg * GWP_CH4_Tese) / 1000
+    emissao_n2o_tco2eq = (emissao_n2o_dia_kg * GWP_N2O_Tese) / 1000
+    emissao_total_tco2eq = emissao_ch4_tco2eq + emissao_n2o_tco2eq
+    
+    return emissao_total_tco2eq
+
+@st.cache_data(show_spinner=False)
+def calculate_compost_emissions(parametros, dias_operacao, context, **kwargs):
+    """
+    Calcula as emissões de gases da compostagem (metodologia UNFCCC) ou vermicompostagem (Tese).
+    """
+
+    # Desempacotar os parâmetros
+    residuos_ano = parametros.get('residuos_ano', 0)
+    fator_CH4 = parametros.get('fator_CH4', 0)
+    fator_N2O = parametros.get('fator_N2O', 0)
+    GWP_CH4_UNFCCC = parametros.get('GWP_CH4_UNFCCC', 0)
+    GWP_N2O_UNFCCC = parametros.get('GWP_N2O_UNFCCC', 0)
+    GWP_CH4_Tese = parametros.get('GWP_CH4_Tese', 0)
+    GWP_N2O_Tese = parametros.get('GWP_N2O_Tese', 0)
+
+    # Conversão de unidades
+    emissao_anual_toneladas = residuos_ano
+    emissao_diaria_toneladas = emissao_anual_toneladas / 365
+    emissao_diaria_kg = emissao_diaria_toneladas * 1000
+
+    if context == 'UNFCCC':
+        # Emissões UNFCCC (compostagem)
+        emissao_ch4_dia_kg = emissao_diaria_kg * fator_CH4
+        emissao_n2o_dia_kg = emissao_diaria_kg * fator_N2O
+        
+        emissao_ch4_tco2eq = (emissao_ch4_dia_kg * GWP_CH4_UNFCCC) / 1000
+        emissao_n2o_tco2eq = (emissao_n2o_dia_kg * GWP_N2O_UNFCCC) / 1000
+        
+        emissao_total_tco2eq = emissao_ch4_tco2eq + emissao_n2o_tco2eq
+        
+        return np.ones(dias_operacao) * emissao_total_tco2eq
+
+    elif context == 'Tese':
+        
+        # Emissões Tese (vermicompostagem)
+        fator_CH4_vermi_dia = 0.00022672
+        fator_N2O_vermi_dia = 0.00006159
+        
+        emissao_ch4_total_50dias_kg = 0.011336
+        emissao_n2o_total_50dias_kg = 0.00307937
+        
+        perfil_ch4 = get_vermi_ch4_temporal_profile(dias_operacao)
+        perfil_n2o = get_vermi_n2o_temporal_profile(dias_operacao)
+        
+        # Escalar as emissões diárias pelo perfil temporal e para a quantidade de resíduos
+        emissao_ch4_dia_kg = perfil_ch4 * (emissao_ch4_total_50dias_kg * (residuos_ano/365)/100)
+        emissao_n2o_dia_kg = perfil_n2o * (emissao_n2o_total_50dias_kg * (residuos_ano/365)/100)
+        
+        emissao_ch4_tco2eq = (emissao_ch4_dia_kg * GWP_CH4_Tese) / 1000
+        emissao_n2o_tco2eq = (emissao_n2o_dia_kg * GWP_N2O_Tese) / 1000
+        
+        emissao_total_tco2eq = emissao_ch4_tco2eq + emissao_n2o_tco2eq
+
+        return emissao_total_tco2eq
+
+# Sidebar para input de dados
 st.sidebar.header("Parâmetros do Projeto")
+# Definir valores padrão
+params_default = {
+    'residuos_ano': 36500,
+    'anos_projeto': 20,
+    'fração_organica': 0.5,
+    'k_constante': 0.05,
+    'L0_fator': 0.15,
+    'taxa_N2O': 0.001,
+    'eficiencia_ch4': 0,
+    'fator_CH4': 0.004,
+    'fator_N2O': 0.001,
+    'GWP_CH4_Tese': 79.7,
+    'GWP_N2O_Tese': 273,
+    'GWP_CH4_UNFCCC': 25,
+    'GWP_N2O_UNFCCC': 298
+}
 
-# Parâmetros de entrada do usuário
-st.sidebar.subheader("Volume de Resíduos")
-volume_residuos = st.sidebar.number_input(
-    'Massa de resíduos orgânicos (kg/dia)',
-    min_value=1.0,
-    value=100.0,
-    step=10.0,
-    format="%.2f",
-    help="Massa inicial de resíduos orgânicos (base úmida) para simulação."
+params = {}
+params['residuos_ano'] = st.sidebar.number_input(
+    'Massa de resíduos orgânicos anuais (t)', 
+    min_value=1.0, 
+    value=params_default['residuos_ano'], 
+    step=100.0, 
+    help="Quantidade anual de resíduos orgânicos processados (toneladas)."
 )
 
-anos_simulacao = st.sidebar.number_input(
-    'Anos de simulação (período de crédito)',
-    min_value=1,
-    value=20,
-    step=1,
-    help="Número de anos para calcular as emissões acumuladas e créditos de carbono."
+params['anos_projeto'] = st.sidebar.number_input(
+    'Anos do projeto', 
+    min_value=1, 
+    value=params_default['anos_projeto'], 
+    step=1
 )
 
-# Parâmetros Vermicompostagem
-st.sidebar.subheader("Parâmetros Vermicompostagem")
-ch4_vermi_emis_fator = st.sidebar.number_input(
-    'Fator de Emissão de CH₄ (Vermicompostagem, % da massa)',
-    min_value=0.0,
-    value=0.00136,
-    step=0.0001,
-    format="%.5f",
-    help="Fração de Carbono Orgânico Total (TOC) emitida como CH₄-C."
+st.sidebar.subheader("Parâmetros do Cenário de Baseline (Aterro Sanitário)")
+params['fração_organica'] = st.sidebar.slider(
+    'Fração de resíduos orgânicos decomponível', 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=params_default['fração_organica'], 
+    step=0.01
+)
+params['k_constante'] = st.sidebar.slider(
+    'Constante k (decomposição)', 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=params_default['k_constante'], 
+    step=0.01
+)
+params['L0_fator'] = st.sidebar.slider(
+    'Fator L0 (máximo CH4)', 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=params_default['L0_fator'], 
+    step=0.01
+)
+params['eficiencia_ch4'] = st.sidebar.slider(
+    'Eficiência de recuperação de CH4', 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=params_default['eficiencia_ch4'], 
+    step=0.01
+)
+params['taxa_N2O'] = st.sidebar.number_input(
+    'Taxa de emissão de N2O (kg/t resíduo)', 
+    min_value=0.0, 
+    value=params_default['taxa_N2O'], 
+    step=0.001
 )
 
-n2o_vermi_emis_fator = st.sidebar.number_input(
-    'Fator de Emissão de N₂O (Vermicompostagem, % da massa)',
-    min_value=0.0,
-    value=0.0092,
-    step=0.0001,
-    format="%.4f",
-    help="Fração de Nitrogênio Total (TN) emitida como N₂O-N."
-)
-
-# Parâmetros Aterro Sanitário
-st.sidebar.subheader("Parâmetros Aterro Sanitário")
-ch4_aterro_emis_fator = st.sidebar.number_input(
-    'Fator de Emissão de CH₄ (Aterro, % da massa)',
-    min_value=0.0,
-    value=0.05,
+st.sidebar.subheader("Parâmetros da Tecnologia Ambiental")
+params['fator_CH4'] = st.sidebar.number_input(
+    'Fator de Emissão de CH4 (UNFCCC)', 
+    min_value=0.0, 
+    value=params_default['fator_CH4'], 
     step=0.001,
-    format="%.3f",
-    help="Fração de Carbono Orgânico Dissolvido (DOC) convertida em CH₄."
+    help="Aplica-se ao cálculo de compostagem pela metodologia UNFCCC."
+)
+params['fator_N2O'] = st.sidebar.number_input(
+    'Fator de Emissão de N2O (UNFCCC)', 
+    min_value=0.0, 
+    value=params_default['fator_N2O'], 
+    step=0.001,
+    help="Aplica-se ao cálculo de compostagem pela metodologia UNFCCC."
 )
 
-n2o_aterro_emis_fator = st.sidebar.number_input(
-    'Fator de Emissão de N₂O (Aterro, % da massa)',
-    min_value=0.0,
-    value=0.0000002,
-    step=0.0000001,
-    format="%.7f",
-    help="Fração de N emitida como N₂O."
+st.sidebar.subheader("Valores de GWP (Potencial de Aquecimento Global)")
+params['GWP_CH4_Tese'] = st.sidebar.number_input(
+    'GWP do CH4 (Tese)', 
+    min_value=1.0, 
+    value=params_default['GWP_CH4_Tese'], 
+    step=1.0
 )
-
-st.sidebar.subheader("Conversão e GWP")
-gwp_ch4 = st.sidebar.number_input(
-    'GWP - Potencial de Aquecimento Global CH₄',
-    min_value=1,
-    value=79,
-    step=1,
-    help="GWP do metano, por exemplo, 79 (IPCC AR6)."
+params['GWP_N2O_Tese'] = st.sidebar.number_input(
+    'GWP do N2O (Tese)', 
+    min_value=1.0, 
+    value=params_default['GWP_N2O_Tese'], 
+    step=1.0
 )
-
-gwp_n2o = st.sidebar.number_input(
-    'GWP - Potencial de Aquecimento Global N₂O',
-    min_value=1,
-    value=273,
-    step=1,
-    help="GWP do óxido nitroso, por exemplo, 273 (IPCC AR6)."
+params['GWP_CH4_UNFCCC'] = st.sidebar.number_input(
+    'GWP do CH4 (UNFCCC)', 
+    min_value=1.0, 
+    value=params_default['GWP_CH4_UNFCCC'], 
+    step=1.0
+)
+params['GWP_N2O_UNFCCC'] = st.sidebar.number_input(
+    'GWP do N2O (UNFCCC)', 
+    min_value=1.0, 
+    value=params_default['GWP_N2O_UNFCCC'], 
+    step=1.0
 )
 
 # Botão de simulação
 if st.sidebar.button('Executar Simulação'):
     st.session_state.run_simulation = True
-    
+
+# Execução da simulação
 if st.session_state.get('run_simulation', False):
-    with st.spinner('Executando simulação...'):
-        # Constantes
-        ms = volume_residuos * (1 - 0.85)
-        toc = ms * 0.436
-        tn = ms * 0.0142
-        
-        # Perfil Temporal - Vermicompostagem
-        # Fonte: Yang et al. (2017)
-        # Perfil para vermicompostagem (50 dias)
-        perfil_ch4 = np.array([12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-        perfil_n2o = np.array([21.8, 25.1, 29.8, 20.3, 15.6, 12.4, 9.8, 7.5, 6.2, 5.1, 4.3, 3.5, 2.9, 2.3, 1.8, 1.4, 1.1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.4, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
-        
-        # Normalização dos perfis
-        perfil_ch4_norm = perfil_ch4 / perfil_ch4.sum()
-        perfil_n2o_norm = perfil_n2o / perfil_n2o.sum()
+    dias_operacao = params['anos_projeto'] * 365
 
-        # Função para simulação por dia
-        def simular_dia(dia):
-            # Emissões Vermicompostagem
-            ch4_vermi_dia = (toc * ch4_vermi_emis_fator) * perfil_ch4_norm[dia % 50]
-            n2o_vermi_dia = (tn * n2o_vermi_emis_fator) * perfil_n2o_norm[dia % 50]
-            
-            # Emissões Aterro (simulação temporal simplificada)
-            ch4_aterro_dia = volume_residuos * ch4_aterro_emis_fator
-            n2o_aterro_dia = volume_residuos * n2o_aterro_emis_fator
-            
-            # Conversão para tCO₂eq
-            total_vermi_tco2eq_dia = (ch4_vermi_dia * gwp_ch4 + n2o_vermi_dia * gwp_n2o) / 1000
-            total_aterro_tco2eq_dia = (ch4_aterro_dia * gwp_ch4 + n2o_aterro_dia * gwp_n2o) / 1000
-            
-            return total_vermi_tco2eq_dia, total_aterro_tco2eq_dia
+    # Cálculo das emissões
+    emissao_aterro = calculate_landfill_emissions(params, dias_operacao)
+    emissao_vermicompostagem = calculate_compost_emissions(params, dias_operacao, context='Tese')
+    emissao_compostagem = calculate_compost_emissions(params, dias_operacao, context='UNFCCC')
 
-        # Executar a simulação para todos os dias
-        num_dias = anos_simulacao * 365
-        resultados = Parallel(n_jobs=-1)(delayed(simular_dia)(i) for i in range(num_dias))
-        
-        # Criar DataFrame com os resultados
-        df = pd.DataFrame(resultados, columns=['Total_Vermi_tCO2eq_dia', 'Total_Aterro_tCO2eq_dia'])
-        df['Dias'] = np.arange(1, num_dias + 1)
-        df['Emissoes_Evitadas'] = df['Total_Aterro_tCO2eq_dia'] - df['Total_Vermi_tCO2eq_dia']
+    # Anos e dias
+    dias = np.arange(1, dias_operacao + 1)
+    anos = dias / 365
 
-        # Cálculos anuais
-        df['Ano'] = (df['Dias'] - 1) // 365 + 1
-        df_anual = df.groupby('Ano').sum().reset_index()
-        df_anual.drop(columns=['Dias'], inplace=True)
-        
-        # Resultados finais
-        df_anual_revisado = pd.DataFrame({
-            'Year': df_anual['Ano'],
-            'Baseline emissions (t CO₂eq)': df_anual['Total_Aterro_tCO2eq_dia'],
-            'Project emissions (t CO₂eq)': df_anual['Total_Vermi_tCO2eq_dia'],
-            'Emissions reductions (t CO₂eq)': df_anual['Emissoes_Evitadas']
-        })
+    # Criar DataFrame com os resultados diários
+    df = pd.DataFrame({
+        'Dia': dias,
+        'Ano': anos,
+        'Total_Aterro_tCO2eq_dia': emissao_aterro,
+        'Total_Vermi_tCO2eq_dia': emissao_vermicompostagem
+    })
+    
+    # Criar o DataFrame com os resultados anuais
+    df_anual = df.groupby(np.floor(df['Ano'])).sum()
+    df_anual['Year'] = df_anual.index.astype(int)
+    df_anual.rename(columns={'Total_Aterro_tCO2eq_dia': 'Baseline emissions (t CO₂eq)',
+                             'Total_Vermi_tCO2eq_dia': 'Project emissions (t CO₂eq)'}, inplace=True)
+    df_anual_revisado = df_anual[['Year', 'Baseline emissions (t CO₂eq)', 'Project emissions (t CO₂eq)']].copy()
+    
+    # Criar o DataFrame de comparação anual (UNFCCC)
+    df_comp = pd.DataFrame({
+        'Dia': dias,
+        'Total_Aterro_tCO2eq_dia': emissao_aterro,
+        'Total_Compost_tCO2eq_dia': emissao_compostagem
+    })
 
-        # UNFCCC
-        df_comp_anual = df_anual_revisado.copy()
-        
-        df_comp_anual_revisado = pd.DataFrame({
-            'Year': df_comp_anual['Year'],
-            'Baseline emissions (t CO₂eq)': df_comp_anual['Baseline emissions (t CO₂eq)'],
-            'Project emissions (t CO₂eq)': df_comp_anual['Project emissions (t CO₂eq)'],
-            'Emissions reductions (t CO₂eq)': df_comp_anual['Emissions reductions (t CO₂eq)']
-        })
+    df_comp_anual = df_comp.groupby(np.floor(df_comp['Dia']/365)).sum()
+    df_comp_anual['Year'] = df_comp_anual.index.astype(int) + 1
+    df_comp_anual.rename(columns={'Total_Aterro_tCO2eq_dia': 'Baseline emissions (t CO₂eq)',
+                                  'Total_Compost_tCO2eq_dia': 'Project emissions (t CO₂eq)'}, inplace=True)
+    df_comp_anual_revisado = df_comp_anual[['Year', 'Baseline emissions (t CO₂eq)', 'Project emissions (t CO₂eq)']].copy()
 
-        # Exibir resultados
-        st.header("Resultados da Simulação")
-        
-        # Cálculos para exibição dos percentuais
-        emissao_aterro_dia_1 = df['Total_Aterro_tCO2eq_dia'][0]
-        emissao_vermi_dia_1 = df['Total_Vermi_tCO2eq_dia'][0]
-        
-        # Redução no primeiro dia (perfil temporal)
-        reducao_vermi_dia_1 = (emissao_aterro_dia_1 - emissao_vermi_dia_1) / emissao_aterro_dia_1 * 100
-        
-        # Redução total em 20 anos
-        emissao_aterro_total = df_anual_revisado['Baseline emissions (t CO₂eq)'].sum()
-        emissao_vermi_total = df_anual_revisado['Project emissions (t CO₂eq)'].sum()
-        reducao_vermi_total = (emissao_aterro_total - emissao_vermi_total) / emissao_aterro_total * 100
-        
-        # Exibição dos percentuais de redução
-        st.subheader("Redução de Emissões - Vermicompostagem vs. Aterro Sanitário")
-        
-        st.markdown(f"""
-        Com base nos resultados da simulação, a vermicompostagem se destaca como uma tecnologia ambiental que pode reduzir significativamente as emissões de gases de efeito estufa.
-        
-        * **Primeiro dia:**
-            * Emissões diárias médias (exemplo didático): redução de **89,0%**.
-            * Emissões com perfil temporal: redução de **{formatar_br(reducao_vermi_dia_1)}%**.
-        * **Redução acumulada em 20 anos:**
-            * As emissões totais são reduzidas em **{formatar_br(reducao_vermi_total)}%**.
-        """)
+    # Exibição dos resultados
+    st.header("Resultados da Simulação")
 
-        # Tabela de resultados anuais - Proposta da Tese
-        st.subheader("Tabelas de Resultados Anuais - Proposta da Tese")
+    # Cálculos para exibição dos percentuais
+    emissao_aterro_dia_1 = df['Total_Aterro_tCO2eq_dia'][0]
+    emissao_vermi_dia_1 = df['Total_Vermi_tCO2eq_dia'][0]
+    
+    # Redução no primeiro dia (perfil temporal)
+    reducao_vermi_dia_1 = (emissao_aterro_dia_1 - emissao_vermi_dia_1) / emissao_aterro_dia_1 * 100
+    
+    # Redução total em 20 anos
+    emissao_aterro_total = df_anual_revisado['Baseline emissions (t CO₂eq)'].sum()
+    emissao_vermi_total = df_anual_revisado['Project emissions (t CO₂eq)'].sum()
+    reducao_vermi_total = (emissao_aterro_total - emissao_vermi_total) / emissao_aterro_total * 100
+    
+    # Exibição dos percentuais de redução
+    st.subheader("Redução de Emissões - Vermicompostagem vs. Aterro Sanitário")
+    
+    st.markdown(f"""
+    Com base nos resultados da simulação, a vermicompostagem se destaca como uma tecnologia ambiental que pode reduzir significativamente as emissões de gases de efeito estufa.
+    
+    * **Primeiro dia:**
+        * Emissões diárias médias (exemplo didático): redução de **89,0%**.
+        * Emissões com perfil temporal: redução de **{formatar_br(reducao_vermi_dia_1)}%**.
+    * **Redução acumulada em 20 anos:**
+        * As emissões totais são reduzidas em **{formatar_br(reducao_vermi_total)}%**.
+    """)
 
-        # Criar uma cópia para formatação
-        df_anual_formatado = df_anual_revisado.copy()
-        for col in df_anual_formatado.columns:
-            if col != 'Year':
-                df_anual_formatado[col] = df_anual_formatado[col].apply(formatar_br)
+    st.subheader("Emissões Evitadas (Tese)")
+    
+    # Exibir valor total de emissões evitadas (tCO2eq)
+    total_evitado = emissao_aterro.sum() - emissao_vermicompostagem.sum()
+    st.metric("Total de emissões evitadas (Tese)", f"{total_evitado:,.2f} tCO₂eq".replace(",", "X").replace(".", ",").replace("X", "."))
 
-        st.dataframe(df_anual_formatado)
+    # Tabela de resultados anuais - Tese
+    st.subheader("Resultados Anuais - Proposta da Tese")
+    
+    # Criar uma cópia para formatação
+    df_anual_formatado = df_anual_revisado.copy()
+    for col in df_anual_formatado.columns:
+        if col != 'Year':
+            df_anual_formatado[col] = df_anual_formatado[col].apply(formatar_br)
 
-        # Tabela de resultados anuais - Metodologia UNFCCC
-        st.subheader("Resultados Anuais - Metodologia UNFCCC")
+    st.dataframe(df_anual_formatado)
 
-        # Criar uma cópia para formatação
-        df_comp_formatado = df_comp_anual_revisado.copy()
-        for col in df_comp_formatado.columns:
-            if col != 'Year':
-                df_comp_formatado[col] = df_comp_formatado[col].apply(formatar_br)
+    # Tabela de resultados anuais - Metodologia UNFCCC
+    st.subheader("Resultados Anuais - Metodologia UNFCCC")
 
-        st.dataframe(df_comp_formatado)
+    # Criar uma cópia para formatação
+    df_comp_formatado = df_comp_anual_revisado.copy()
+    for col in df_comp_formatado.columns:
+        if col != 'Year':
+            df_comp_formatado[col] = df_comp_formatado[col].apply(formatar_br)
+
+    st.dataframe(df_comp_formatado)
 
 else:
     st.info("Ajuste os parâmetros na barra lateral e clique em 'Executar Simulação' para ver os resultados.")
@@ -253,12 +394,5 @@ st.markdown("""
 - IPCC (2006). Guidelines for National Greenhouse Gas Inventories.
 - UNFCCC (2016). Tool to determine methane emissions from solid waste disposal sites.
 - Wang et al. (2017). Nitrous oxide emissions from landfills.
-- Feng et al. (2021). The effects of different cover materials on N₂O and CH₄ emissions from landfilling.
-
-**Cenário de Projeto (Vermicompostagem):**
-- Yang et al. (2017). Methane and nitrous oxide emissions during vermicomposting of cattle manure.
-
-**Potencial de Aquecimento Global (GWP):**
-- IPCC (2021). Climate Change 2021: The Physical Science Basis. Contribution of Working Group I to the Sixth Assessment Report of the Intergovernmental Panel on Climate Change.
-
+- Feng et al. (20...
 """)
