@@ -2,13 +2,8 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy import integrate
-from SALib.sample import saltelli
-from SALib.analyze import sobol
 from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
+import io
 
 # Configuração da página
 st.set_page_config(
@@ -36,6 +31,7 @@ st.markdown("""
     .stButton>button {
         background-color: #2E7D32;
         color: white;
+        border: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -64,9 +60,9 @@ with st.sidebar:
     st.subheader("Meta de Redução")
     meta_reducao = st.slider("Redução até 2050 (%)", 0, 100, 50, 5)
     
-    st.subheader("Parâmetros Econômicos")
-    crescimento_pib = st.slider("Crescimento anual do PIB (%)", 0.0, 10.0, 2.0, 0.1)
-    intensidade_carbono = st.slider("Intensidade carbono-PIB (tCO₂/R$ mil)", 0.01, 2.0, 0.15, 0.01)
+    st.subheader("Parâmetros de Sensibilidade")
+    n_simulacoes = st.slider("Número de simulações", 10, 1000, 100, 10)
+    incerteza_taxas = st.slider("Incerteza nas taxas (%)", 0, 50, 20, 5)
 
 # Funções de cálculo
 def calcular_emissoes_projetadas(ano_inicio, ano_fim, emissao_atual, taxas):
@@ -74,26 +70,26 @@ def calcular_emissoes_projetadas(ano_inicio, ano_fim, emissao_atual, taxas):
     anos = np.arange(ano_inicio, ano_fim + 1)
     n_anos = len(anos)
     
-    # Distribuição setorial típica do Brasil
-    distribuicao_setorial = {
-        'Energia': 0.45,
-        'Agropecuária': 0.25,
-        'Mudança Uso Solo': 0.20,
-        'Processos Industriais': 0.07,
-        'Resíduos': 0.03
+    # Distribuição setorial (baseada em dados brasileiros)
+    setores = {
+        'Energia': emissao_atual * 0.45,
+        'Agropecuária': emissao_atual * 0.25,
+        'Mudança Uso Solo': emissao_atual * 0.20,
+        'Processos Industriais': emissao_atual * 0.07,
+        'Resíduos': emissao_atual * 0.03
     }
     
     # Projeções por setor
     proj_setores = {}
-    for setor, proporcao in distribuicao_setorial.items():
-        emissao_setor = emissao_atual * proporcao
+    for setor, emissao_setor in setores.items():
         taxa = taxas[setor]
-        # Cálculo de projeção com crescimento anual composto
-        proj = emissao_setor * np.power(1 + taxa/100, np.arange(n_anos))
+        proj = emissao_setor * (1 + taxa/100) ** np.arange(n_anos)
         proj_setores[setor] = proj
     
-    # Total de emissões por ano
-    total = np.sum(list(proj_setores.values()), axis=0)
+    # Total
+    total = np.zeros(n_anos)
+    for proj in proj_setores.values():
+        total += proj
     
     return anos, proj_setores, total
 
@@ -122,7 +118,7 @@ def calcular_orcamento_carbono(total_emissoes, meta_reducao, ano_inicio, ano_fim
             trajetoria[i] = meta_2050
     
     # Cálculo do orçamento (integral das emissões)
-    # Usando regra do trapézio simples
+    # Usando regra do trapézio
     def calcular_integral(y, x):
         integral = 0
         for i in range(1, len(x)):
@@ -139,6 +135,36 @@ def calcular_orcamento_carbono(total_emissoes, meta_reducao, ano_inicio, ano_fim
     orcamento_real = calcular_integral(total_common, anos_common)
     
     return anos_trajetoria, trajetoria, orcamento_trajetoria, orcamento_real
+
+def analise_sensibilidade_monte_carlo(n_simulacoes, taxas_base, incerteza, ano_inicio, ano_fim, emissao_atual, meta_reducao):
+    """Análise de sensibilidade usando Monte Carlo"""
+    resultados = []
+    emissoes_2050 = []
+    
+    for _ in range(n_simulacoes):
+        # Adicionar incerteza às taxas
+        taxas_sim = {}
+        for setor, taxa in taxas_base.items():
+            # Adicionar variação aleatória baseada na incerteza
+            variacao = np.random.uniform(-incerteza/100, incerteza/100) * taxa
+            taxas_sim[setor] = taxa + variacao
+        
+        # Calcular emissões
+        anos, proj_setores, total = calcular_emissoes_projetadas(
+            ano_inicio, ano_fim, emissao_atual, taxas_sim
+        )
+        
+        # Encontrar emissões em 2050
+        idx_2050 = np.where(anos == 2050)[0]
+        if len(idx_2050) > 0:
+            emissao_2050 = total[idx_2050[0]]
+        else:
+            emissao_2050 = total[-1]
+        
+        resultados.append(taxas_sim)
+        emissoes_2050.append(emissao_2050)
+    
+    return resultados, np.array(emissoes_2050)
 
 # Cálculos principais
 taxas = {
@@ -179,7 +205,6 @@ with col2:
         idx_traj_2050 = np.where(anos_trajetoria == 2050)[0]
         trajetoria_2050 = trajetoria[idx_traj_2050[0]] if len(idx_traj_2050) > 0 else trajetoria[-1]
     else:
-        # Se 2050 não estiver no intervalo, usar o último ano
         emissao_2050 = total_emissoes[-1]
         trajetoria_2050 = trajetoria[-1]
     
@@ -194,12 +219,14 @@ with col2:
 
 with col3:
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    int_carbono_2050 = intensidade_carbono * np.power(1 - crescimento_pib/100, 2050 - ano_inicio)
+    crescimento_pib = 2.0  # Valor padrão
+    intensidade_carbono = 0.15  # Valor padrão
+    int_carbono_2050 = intensidade_carbono * (1 - crescimento_pib/100) ** (2050 - ano_inicio)
     delta_intensidade = int_carbono_2050 - intensidade_carbono
     st.metric(
-        label="Intensidade Carbono (tCO₂/R$ mil)",
-        value=f"{intensidade_carbono:.3f}",
-        delta=f"{delta_intensidade:.3f} em 2050"
+        label="Redução Necessária/Ano",
+        value=f"{(total_emissoes[0] - trajetoria_2050) / (2050 - ano_inicio):,.0f}",
+        delta=f"MtCO₂e/ano"
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -209,22 +236,18 @@ tab1, tab2, tab3 = st.tabs(["📈 Projeções", "🌡️ Análise de Sensibilida
 with tab1:
     st.subheader("Projeção de Emissões")
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
     
     # Gráfico 1: Projeção vs Meta
     ax1.plot(anos, total_emissoes, 'r-', linewidth=3, label='Projeção Atual')
     ax1.plot(anos_trajetoria, trajetoria, 'g--', linewidth=3, label='Meta de Redução')
     
     # Preencher área entre as curvas
-    anos_comum = np.intersect1d(anos, anos_trajetoria)
-    idx_anos = np.searchsorted(anos, anos_comum)
-    idx_traj = np.searchsorted(anos_trajetoria, anos_comum)
-    
-    ax1.fill_between(anos_comum, total_emissoes[idx_anos], trajetoria[idx_traj], 
-                     where=(total_emissoes[idx_anos] > trajetoria[idx_traj]), 
-                     color='red', alpha=0.3, label='Excesso de Emissões')
-    ax1.fill_between(anos_comum, total_emissoes[idx_anos], trajetoria[idx_traj], 
-                     where=(total_emissoes[idx_anos] <= trajetoria[idx_traj]), 
+    ax1.fill_between(anos, total_emissoes, trajetoria[:len(anos)], 
+                     where=(total_emissoes > trajetoria[:len(anos)]), 
+                     color='red', alpha=0.3, label='Excesso')
+    ax1.fill_between(anos, total_emissoes, trajetoria[:len(anos)], 
+                     where=(total_emissoes <= trajetoria[:len(anos)]), 
                      color='green', alpha=0.3, label='Dentro da Meta')
     
     ax1.set_xlabel('Ano')
@@ -267,103 +290,106 @@ with tab1:
     st.pyplot(fig2)
 
 with tab2:
-    st.subheader("Análise de Sensibilidade (Método Sobol)")
-    
-    # Definir o problema
-    problem = {
-        'num_vars': 5,
-        'names': ['taxa_energia', 'taxa_agro', 'taxa_solo', 'taxa_ind', 'taxa_res'],
-        'bounds': [
-            [-5.0, 5.0],
-            [-5.0, 5.0],
-            [-15.0, 5.0],
-            [-3.0, 3.0],
-            [-3.0, 3.0]
-        ]
-    }
+    st.subheader("Análise de Sensibilidade (Monte Carlo)")
     
     if st.button("Executar Análise de Sensibilidade", type="primary"):
-        with st.spinner("Executando análise... (isso pode levar alguns segundos)"):
-            # Gerar amostras
-            n_samples = 256  # Número reduzido para performance no Streamlit Cloud
-            try:
-                param_values = saltelli.sample(problem, n_samples)
-                
-                # Avaliar o modelo
-                Y = np.zeros(param_values.shape[0])
-                
-                for i, params in enumerate(param_values):
-                    taxas_sim = {
-                        'Energia': params[0],
-                        'Agropecuária': params[1],
-                        'Mudança Uso Solo': params[2],
-                        'Processos Industriais': params[3],
-                        'Resíduos': params[4]
-                    }
-                    
-                    _, _, total_sim = calcular_emissoes_projetadas(
-                        ano_inicio, ano_fim, emissao_atual, taxas_sim
-                    )
-                    Y[i] = total_sim[-1]  # Emissões no último ano
-                
-                # Realizar análise Sobol
-                Si = sobol.analyze(problem, Y)
-                
-                # Gráfico de sensibilidade
-                fig3, ax4 = plt.subplots(figsize=(10, 6))
-                
-                indices_s1 = Si['S1']
-                indices_st = Si['ST']
-                nomes = problem['names']
-                nomes_legiveis = ['Energia', 'Agropecuária', 'Uso do Solo', 'Industrial', 'Resíduos']
-                x_pos = np.arange(len(nomes))
-                
-                ax4.bar(x_pos - 0.2, indices_s1, 0.4, label='Efeito Principal (S1)', alpha=0.8, color='lightblue')
-                ax4.bar(x_pos + 0.2, indices_st, 0.4, label='Efeito Total (ST)', alpha=0.8, color='darkblue')
-                
-                ax4.set_xlabel('Parâmetro')
-                ax4.set_ylabel('Índice de Sensibilidade')
-                ax4.set_title('Índices de Sensibilidade Sobol')
-                ax4.set_xticks(x_pos)
-                ax4.set_xticklabels(nomes_legiveis)
-                ax4.legend()
-                ax4.grid(True, alpha=0.3)
-                
-                st.pyplot(fig3)
-                
-                # Tabela de resultados
-                st.subheader("Resultados da Análise")
-                resultados = pd.DataFrame({
-                    'Parâmetro': nomes_legiveis,
-                    'Efeito Principal (S1)': indices_s1,
-                    'Efeito Total (ST)': indices_st,
-                    'Contribuição Relativa (%)': (indices_s1 / indices_s1.sum() * 100) if indices_s1.sum() > 0 else 0
-                })
-                
-                st.dataframe(resultados.style.format({
-                    'Efeito Principal (S1)': '{:.4f}',
-                    'Efeito Total (ST)': '{:.4f}',
-                    'Contribuição Relativa (%)': '{:.1f}'
-                }))
-                
-                # Interpretação
-                st.info("""
-                **Interpretação dos resultados:**
-                - **Efeito Principal (S1)**: Mede a contribuição individual de cada parâmetro
-                - **Efeito Total (ST)**: Mede a contribuição total (incluindo interações)
-                - **Parâmetros com maior ST** são os mais importantes para a incerteza do modelo
-                """)
-                
-            except Exception as e:
-                st.error(f"Erro na análise de sensibilidade: {str(e)}")
-                st.info("Tente reduzir o número de amostras ou verificar os parâmetros.")
+        with st.spinner(f"Executando {n_simulacoes} simulações..."):
+            resultados, emissoes_2050 = analise_sensibilidade_monte_carlo(
+                n_simulacoes, taxas, incerteza_taxas, ano_inicio, ano_fim, emissao_atual, meta_reducao
+            )
+            
+            # Estatísticas
+            media_2050 = np.mean(emissoes_2050)
+            mediana_2050 = np.percentile(emissoes_2050, 50)
+            p10_2050 = np.percentile(emissoes_2050, 10)
+            p90_2050 = np.percentile(emissoes_2050, 90)
+            
+            # Gráfico de distribuição
+            fig3, (ax4, ax5) = plt.subplots(1, 2, figsize=(14, 5))
+            
+            # Histograma
+            ax4.hist(emissoes_2050, bins=30, edgecolor='black', alpha=0.7, color='lightblue')
+            ax4.axvline(media_2050, color='red', linestyle='--', linewidth=2, label=f'Média: {media_2050:,.0f}')
+            ax4.axvline(trajetoria_2050, color='green', linestyle='-', linewidth=2, label=f'Meta: {trajetoria_2050:,.0f}')
+            ax4.set_xlabel('Emissões em 2050 (MtCO₂e)')
+            ax4.set_ylabel('Frequência')
+            ax4.set_title('Distribuição das Emissões em 2050')
+            ax4.legend()
+            ax4.grid(True, alpha=0.3)
+            
+            # Boxplot
+            ax5.boxplot(emissoes_2050, vert=True, patch_artist=True)
+            ax5.set_ylabel('Emissões em 2050 (MtCO₂e)')
+            ax5.set_title('Boxplot das Emissões em 2050')
+            ax5.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            st.pyplot(fig3)
+            
+            # Métricas
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Média 2050", f"{media_2050:,.0f} MtCO₂e")
+            with col2:
+                st.metric("Mediana 2050", f"{mediana_2050:,.0f} MtCO₂e")
+            with col3:
+                st.metric("Percentil 10%", f"{p10_2050:,.0f} MtCO₂e")
+            with col4:
+                st.metric("Percentil 90%", f"{p90_2050:,.0f} MtCO₂e")
+            
+            # Análise de correlação
+            st.subheader("Análise de Influência dos Parâmetros")
+            
+            # Converter resultados para DataFrame
+            df_resultados = pd.DataFrame(resultados)
+            df_resultados['Emissao_2050'] = emissoes_2050
+            
+            # Calcular correlações
+            correlacoes = {}
+            for setor in taxas.keys():
+                correlacao = np.corrcoef(df_resultados[setor], emissoes_2050)[0, 1]
+                correlacoes[setor] = correlacao
+            
+            # Gráfico de correlações
+            fig4, ax6 = plt.subplots(figsize=(10, 5))
+            
+            setores_list = list(correlacoes.keys())
+            valores_corr = list(correlacoes.values())
+            
+            bars = ax6.bar(setores_list, valores_corr, color=['red' if v > 0 else 'green' for v in valores_corr])
+            ax6.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+            ax6.set_xlabel('Setor')
+            ax6.set_ylabel('Correlação com Emissões 2050')
+            ax6.set_title('Correlação entre Taxas e Emissões em 2050')
+            ax6.tick_params(axis='x', rotation=45)
+            
+            # Adicionar valores nas barras
+            for bar, v in zip(bars, valores_corr):
+                height = bar.get_height()
+                ax6.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{v:.3f}', ha='center', va='bottom' if height > 0 else 'top')
+            
+            ax6.grid(True, alpha=0.3, axis='y')
+            plt.tight_layout()
+            st.pyplot(fig4)
+            
+            # Tabela de resultados
+            st.subheader("Resumo das Simulações")
+            df_resumo = pd.DataFrame({
+                'Setor': setores_list,
+                'Taxa Base (%)': [taxas[s] for s in setores_list],
+                'Correlação': valores_corr,
+                'Influência': ['Alta' if abs(v) > 0.3 else 'Média' if abs(v) > 0.1 else 'Baixa' for v in valores_corr]
+            })
+            st.dataframe(df_resumo)
 
 with tab3:
     st.subheader("Relatório de Análise")
     
     # Calcular métricas chave
     emissao_inicial = total_emissoes[0]
-    reducao_necessaria = (emissao_inicial - trajetoria[-1]) / max(1, 2050 - ano_inicio)
+    reducao_necessaria = (emissao_inicial - trajetoria_2050) / max(1, 2050 - ano_inicio)
+    gap_2050 = emissao_2050 - trajetoria_2050
     
     # Relatório
     relatorio = f"""
@@ -380,7 +406,7 @@ with tab3:
     - **Orçamento Restante**: {orcamento_restante:,.0f} MtCO₂
     - **Emissões Projetadas 2050**: {emissao_2050:,.0f} MtCO₂e
     - **Meta para 2050**: {trajetoria_2050:,.0f} MtCO₂e
-    - **Gap em 2050**: {emissao_2050 - trajetoria_2050:,.0f} MtCO₂e
+    - **Gap em 2050**: {gap_2050:,.0f} MtCO₂e ({gap_2050/trajetoria_2050*100:+.1f}% acima da meta)
     - **Redução Necessária/Ano**: {reducao_necessaria:,.0f} MtCO₂e/ano
     
     ### 3. CONTRIBUIÇÃO SETORIAL ({ano_fim})
@@ -396,16 +422,16 @@ with tab3:
     
     ### 4. RECOMENDAÇÕES
     
-    1. **Ação Prioritária**: Foco no setor de maior contribuição atual
-    2. **Taxa de Redução**: Aumentar para {abs(reducao_necessaria/emissao_inicial*100):.1f}% ao ano
-    3. **Monitoramento**: Revisar metas a cada 5 anos
-    4. **Políticas**: Implementar mecanismos de precificação de carbono
+    1. **Ação Prioritária**: Foco no setor de maior contribuição
+    2. **Taxa de Redução**: Reduzir {reducao_necessaria/emissao_inicial*100:.1f}% ao ano
+    3. **Monitoramento**: Revisar metas anualmente
+    4. **Políticas**: Implementar mecanismos de mercado de carbono
     
     ### 5. LIMITAÇÕES
     
-    - Baseado em projeções lineares e crescimento composto
-    - Não considera mudanças tecnológicas disruptivas
-    - Cenários econômicos simplificados
+    - Projeções baseadas em crescimento composto
+    - Incertezas econômicas e tecnológicas não consideradas
+    - Cenários climáticos simplificados
     
     ---
     *Relatório gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}*
@@ -419,23 +445,16 @@ with tab3:
     # Criar DataFrame com resultados
     dados_exportacao = pd.DataFrame({
         'Ano': anos,
-        'Emissões_Total': total_emissoes
+        'Emissões_Total': total_emissoes,
+        'Meta_Trajetoria': trajetoria[:len(anos)]
     })
-    
-    # Adicionar trajetória meta (alinhar anos)
-    trajetoria_df = pd.DataFrame({
-        'Ano': anos_trajetoria,
-        'Meta_Trajetoria': trajetoria
-    })
-    
-    dados_exportacao = pd.merge(dados_exportacao, trajetoria_df, on='Ano', how='left')
     
     # Calcular gap
     dados_exportacao['Gap'] = dados_exportacao['Emissões_Total'] - dados_exportacao['Meta_Trajetoria']
     
     # Adicionar dados setoriais
     for setor, proj in proj_setores.items():
-        dados_exportacao[f'Emissões_{setor}'] = proj[:len(dados_exportacao)]
+        dados_exportacao[f'Emissões_{setor}'] = proj
     
     # Converter para CSV
     csv = dados_exportacao.to_csv(index=False)
@@ -453,6 +472,6 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.9rem;">
     <p>📌 <strong>Nota</strong>: Esta ferramenta é para fins educacionais e de planejamento.</p>
-    <p>Fonte: Baseado em metodologias do IPCC e dados do SEEG Brasil</p>
+    <p>Fonte: Baseado em metodologias do IPCC e dados do SEEG Brasil • Desenvolvido com Python e Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
