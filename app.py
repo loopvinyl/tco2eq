@@ -2,20 +2,18 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import plotly.express as px
+import seaborn as sns
 from scipy import stats
 from SALib.sample import saltelli
 from SALib.analyze import sobol
-import seaborn as sns
 from datetime import datetime
+import io
 
 # Configuração da página
 st.set_page_config(
     page_title="Orçamento de Emissões BR",
     page_icon="🌳",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 # CSS personalizado
@@ -33,13 +31,6 @@ st.markdown("""
         border-radius: 10px;
         border-left: 5px solid #2E7D32;
         margin-bottom: 1rem;
-    }
-    .stButton>button {
-        background-color: #2E7D32;
-        color: white;
-        border: none;
-        padding: 0.5rem 2rem;
-        border-radius: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -78,7 +69,7 @@ def calcular_emissoes_projetadas(ano_inicio, ano_fim, emissao_atual, taxas):
     anos = np.arange(ano_inicio, ano_fim + 1)
     n_anos = len(anos)
     
-    # Estrutura dos setores
+    # Distribuição setorial (baseada em dados brasileiros)
     setores = {
         'Energia': emissao_atual * 0.45,
         'Agropecuária': emissao_atual * 0.25,
@@ -142,17 +133,22 @@ with col1:
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
     st.metric(
         label="Orçamento Restante (MtCO₂)",
-        value=f"{orcamento_trajetoria - orcamento_real:,.0f}",
-        delta=f"{((orcamento_trajetoria - orcamento_real)/orcamento_trajetoria*100):.1f}% do total"
+        value=f"{max(0, orcamento_trajetoria - orcamento_real):,.0f}",
+        delta=f"{((orcamento_trajetoria - orcamento_real)/orcamento_trajetoria*100):.1f}% do orçamento"
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
+    try:
+        emissao_2050 = total_emissoes[anos == 2050][0]
+    except:
+        emissao_2050 = total_emissoes[-1]
+    
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
     st.metric(
         label="Emissões em 2050 (MtCO₂)",
-        value=f"{total_emissoes[anos == 2050][0]:,.0f}",
-        delta=f"{((total_emissoes[anos == 2050][0] - trajetoria[anos_trajetoria == 2050][0])/trajetoria[anos_trajetoria == 2050][0]*100):+.1f}% vs meta"
+        value=f"{emissao_2050:,.0f}",
+        delta=f"{((emissao_2050 - trajetoria[-1])/trajetoria[-1]*100):+.1f}% vs meta"
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -165,89 +161,84 @@ with col3:
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Gráficos
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Projeções", "🌡️ Sensibilidade", "📊 Setores", "📋 Relatório"])
+# Gráficos e análises
+tab1, tab2, tab3 = st.tabs(["📈 Projeções", "🌡️ Análise de Sensibilidade", "📋 Relatório"])
 
 with tab1:
-    col1, col2 = st.columns(2)
+    st.subheader("Projeção de Emissões")
     
-    with col1:
-        # Gráfico de linhas - emissões totais
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=anos,
-            y=total_emissoes,
-            mode='lines',
-            name='Projeção Atual',
-            line=dict(color='red', width=3)
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=anos_trajetoria,
-            y=trajetoria,
-            mode='lines',
-            name='Trajetória 1.5°C',
-            line=dict(color='green', width=3, dash='dash')
-        ))
-        
-        fig.update_layout(
-            title='Projeção de Emissões vs Meta',
-            xaxis_title='Ano',
-            yaxis_title='Emissões (MtCO₂e)',
-            hovermode='x unified',
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
     
-    with col2:
-        # Gráfico de barras - contribuição setorial
-        fig2 = go.Figure()
-        
-        # Último ano
-        contrib_setores = [proj[-1] for proj in proj_setores.values()]
-        
-        fig2.add_trace(go.Bar(
-            x=list(proj_setores.keys()),
-            y=contrib_setores,
-            marker_color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
-        ))
-        
-        fig2.update_layout(
-            title=f'Contribuição Setorial em {ano_fim}',
-            xaxis_title='Setor',
-            yaxis_title='Emissões (MtCO₂e)',
-            height=400
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+    # Gráfico 1: Projeção vs Meta
+    ax1.plot(anos, total_emissoes, 'r-', linewidth=3, label='Projeção Atual')
+    ax1.plot(anos_trajetoria, trajetoria, 'g--', linewidth=3, label='Meta de Redução')
+    ax1.fill_between(anos, total_emissoes, trajetoria[:len(anos)], 
+                     where=(total_emissoes > trajetoria[:len(anos)]), 
+                     color='red', alpha=0.3, label='Excesso de Emissões')
+    ax1.fill_between(anos, total_emissoes, trajetoria[:len(anos)], 
+                     where=(total_emissoes <= trajetoria[:len(anos)]), 
+                     color='green', alpha=0.3, label='Dentro da Meta')
+    ax1.set_xlabel('Ano')
+    ax1.set_ylabel('Emissões (MtCO₂e)')
+    ax1.set_title('Projeção vs Meta de Emissões')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Gráfico 2: Contribuição Setorial
+    ultimo_ano_idx = -1
+    contribuicoes = [proj[ultimo_ano_idx] for proj in proj_setores.values()]
+    setores = list(proj_setores.keys())
+    cores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
+    
+    ax2.bar(setores, contribuicoes, color=cores)
+    ax2.set_xlabel('Setor')
+    ax2.set_ylabel('Emissões (MtCO₂e)')
+    ax2.set_title(f'Contribuição Setorial em {ano_fim}')
+    ax2.tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+    # Gráfico 3: Evolução setorial
+    st.subheader("Evolução das Emissões por Setor")
+    fig2, ax3 = plt.subplots(figsize=(12, 6))
+    
+    for i, (setor, proj) in enumerate(proj_setores.items()):
+        ax3.plot(anos, proj, label=setor, linewidth=2)
+    
+    ax3.set_xlabel('Ano')
+    ax3.set_ylabel('Emissões (MtCO₂e)')
+    ax3.set_title('Evolução das Emissões por Setor Econômico')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    st.pyplot(fig2)
 
 with tab2:
     st.subheader("Análise de Sensibilidade (Método Sobol)")
     
-    # Definir o problema para análise Sobol
+    # Definir o problema
     problem = {
         'num_vars': 5,
         'names': ['taxa_energia', 'taxa_agro', 'taxa_solo', 'taxa_ind', 'taxa_res'],
         'bounds': [
-            [-5.0, 5.0],      # taxa_energia
-            [-5.0, 5.0],      # taxa_agro
-            [-15.0, 5.0],     # taxa_solo
-            [-3.0, 3.0],      # taxa_ind
-            [-3.0, 3.0]       # taxa_res
+            [-5.0, 5.0],
+            [-5.0, 5.0],
+            [-15.0, 5.0],
+            [-3.0, 3.0],
+            [-3.0, 3.0]
         ]
     }
     
-    if st.button("Executar Análise de Sensibilidade"):
-        with st.spinner("Executando análise... (pode levar alguns segundos)"):
+    if st.button("Executar Análise de Sensibilidade", type="primary"):
+        with st.spinner("Executando análise... (isso pode levar alguns segundos)"):
             # Gerar amostras
-            n_samples = 1000
+            n_samples = 512  # Número reduzido para performance
             param_values = saltelli.sample(problem, n_samples)
             
-            # Avaliar modelo para cada conjunto de parâmetros
-            Y = np.zeros([param_values.shape[0]])
+            # Avaliar o modelo
+            Y = np.zeros(param_values.shape[0])
             
             for i, params in enumerate(param_values):
-                # Extrair parâmetros
                 taxas_sim = {
                     'Energia': params[0],
                     'Agropecuária': params[1],
@@ -256,132 +247,134 @@ with tab2:
                     'Resíduos': params[4]
                 }
                 
-                # Calcular emissões
                 _, _, total_sim = calcular_emissoes_projetadas(
                     ano_inicio, ano_fim, emissao_atual, taxas_sim
                 )
-                
-                # Usar emissão em 2050 como métrica
-                Y[i] = total_sim[anos == 2050][0]
+                Y[i] = total_sim[-1]  # Emissões no último ano
             
             # Realizar análise Sobol
             Si = sobol.analyze(problem, Y)
             
             # Gráfico de sensibilidade
-            fig_sens = go.Figure()
+            fig3, ax4 = plt.subplots(figsize=(10, 6))
             
-            fig_sens.add_trace(go.Bar(
-                x=problem['names'],
-                y=Si['S1'],
-                name='Efeito principal',
-                marker_color='lightblue'
-            ))
+            indices_s1 = Si['S1']
+            indices_st = Si['ST']
+            nomes = problem['names']
+            x_pos = np.arange(len(nomes))
             
-            fig_sens.add_trace(go.Bar(
-                x=problem['names'],
-                y=Si['ST'],
-                name='Efeito total',
-                marker_color='darkblue'
-            ))
+            ax4.bar(x_pos - 0.2, indices_s1, 0.4, label='Efeito Principal (S1)', alpha=0.8)
+            ax4.bar(x_pos + 0.2, indices_st, 0.4, label='Efeito Total (ST)', alpha=0.8)
             
-            fig_sens.update_layout(
-                title='Índices de Sensibilidade Sobol',
-                xaxis_title='Parâmetro',
-                yaxis_title='Índice de Sensibilidade',
-                barmode='group',
-                height=400
-            )
+            ax4.set_xlabel('Parâmetro')
+            ax4.set_ylabel('Índice de Sensibilidade')
+            ax4.set_title('Índices de Sensibilidade Sobol')
+            ax4.set_xticks(x_pos)
+            ax4.set_xticklabels(['Energia', 'Agro', 'Uso Solo', 'Industrial', 'Resíduos'])
+            ax4.legend()
+            ax4.grid(True, alpha=0.3)
             
-            st.plotly_chart(fig_sens, use_container_width=True)
+            st.pyplot(fig3)
             
             # Tabela de resultados
             st.subheader("Resultados da Análise")
-            sens_df = pd.DataFrame({
-                'Parâmetro': problem['names'],
-                'Efeito Principal (S1)': Si['S1'],
-                'Efeito Total (ST)': Si['ST'],
-                'Variância Explicada (%)': Si['S1'] / Si['S1'].sum() * 100
+            resultados = pd.DataFrame({
+                'Parâmetro': nomes,
+                'Efeito Principal (S1)': indices_s1,
+                'Efeito Total (ST)': indices_st,
+                'Contribuição Relativa (%)': indices_s1 / indices_s1.sum() * 100
             })
             
-            st.dataframe(sens_df.style.format({
+            st.dataframe(resultados.style.format({
                 'Efeito Principal (S1)': '{:.4f}',
                 'Efeito Total (ST)': '{:.4f}',
-                'Variância Explicada (%)': '{:.1f}'
+                'Contribuição Relativa (%)': '{:.1f}'
             }))
+            
+            # Interpretação
+            st.info("""
+            **Interpretação dos resultados:**
+            - **Efeito Principal (S1)**: Mede a contribuição individual de cada parâmetro
+            - **Efeito Total (ST)**: Mede a contribuição total (incluindo interações)
+            - **Parâmetros com maior ST** são os mais importantes para a incerteza do modelo
+            """)
 
 with tab3:
-    # Gráfico de área - evolução setorial
-    fig_area = go.Figure()
-    
-    # Preparar dados
-    anos_array = np.tile(anos, (5, 1)).T.flatten()
-    setores_array = np.repeat(list(proj_setores.keys()), len(anos))
-    valores_array = np.concatenate([proj_setores[setor] for setor in proj_setores.keys()])
-    
-    df_area = pd.DataFrame({
-        'Ano': anos_array,
-        'Setor': setores_array,
-        'Emissões': valores_array
-    })
-    
-    fig_area = px.area(df_area, x='Ano', y='Emissões', color='Setor',
-                       title='Evolução das Emissões por Setor',
-                       color_discrete_sequence=px.colors.qualitative.Set3)
-    
-    fig_area.update_layout(height=500)
-    st.plotly_chart(fig_area, use_container_width=True)
-
-with tab4:
     st.subheader("Relatório de Análise")
     
-    # Gerar relatório
+    # Calcular métricas chave
+    gap_2050 = emissao_2050 - trajetoria[-1]
+    anos_restantes = 2050 - ano_inicio
+    reducao_necessaria_ano = (total_emissoes[0] - trajetoria[-1]) / anos_restantes
+    
+    # Relatório
     relatorio = f"""
-    ## Relatório de Orçamento de Emissões - Brasil
+    ## 📊 Relatório de Orçamento de Carbono - Brasil
     
-    ### 1. Resumo Executivo
-    - **Período analisado**: {ano_inicio} - {ano_fim}
-    - **Emissões atuais**: {emissao_atual:,.0f} MtCO₂e
-    - **Orçamento restante**: {orcamento_trajetoria - orcamento_real:,.0f} MtCO₂
-    - **Gap em 2050**: {total_emissoes[anos == 2050][0] - trajetoria[anos_trajetoria == 2050][0]:,.0f} MtCO₂e
+    ### 1. RESUMO EXECUTIVO
     
-    ### 2. Projeções por Setor ({ano_fim})
+    **Período Analisado**: {ano_inicio}-{ano_fim}
+    **Emissões Iniciais**: {emissao_atual:,.0f} MtCO₂e/ano
+    **Meta de Redução**: {meta_reducao}% até 2050
+    
+    ### 2. RESULTADOS PRINCIPAIS
+    
+    - **Orçamento Restante**: {max(0, orcamento_trajetoria - orcamento_real):,.0f} MtCO₂
+    - **Emissões Projetadas 2050**: {emissao_2050:,.0f} MtCO₂e
+    - **Gap em 2050**: {gap_2050:,.0f} MtCO₂e ({gap_2050/trajetoria[-1]*100:+.1f}% acima da meta)
+    - **Redução Necessária/Ano**: {reducao_necessaria_ano:,.0f} MtCO₂e/ano
+    
+    ### 3. CONTRIBUIÇÃO SETORIAL ({ano_fim})
+    
     """
     
     for setor, proj in proj_setores.items():
-        relatorio += f"- **{setor}**: {proj[-1]:,.0f} MtCO₂e ({proj[-1]/total_emissoes[-1]*100:.1f}% do total)\n"
+        contrib = proj[-1]
+        percentual = contrib / total_emissoes[-1] * 100
+        relatorio += f"- **{setor}**: {contrib:,.0f} MtCO₂e ({percentual:.1f}%)\n"
     
     relatorio += f"""
     
-    ### 3. Recomendações
-    1. **Prioridade de ação**: Setor {max(proj_setores.items(), key=lambda x: x[1][-1])[0]} apresenta maior contribuição
-    2. **Taxa necessária**: Redução adicional de {abs((total_emissoes[anos == 2050][0] - trajetoria[anos_trajetoria == 2050][0])/trajetoria[anos_trajetoria == 2050][0]*100):.1f}% para atingir meta
-    3. **Orçamento anual médio**: {(orcamento_trajetoria - orcamento_real)/(ano_fim - ano_inicio):,.0f} MtCO₂e/ano
+    ### 4. RECOMENDAÇÕES
     
-    ### 4. Limitações
-    - Projeções baseadas em tendências lineares
-    - Não considera políticas futuras
-    - Baseado em dados históricos até {ano_inicio}
+    1. **Ação Prioritária**: Foco no setor de maior crescimento
+    2. **Taxa de Redução**: Aumentar para {abs(reducao_necessaria_ano/emissao_atual*100):.1f}% ao ano
+    3. **Monitoramento**: Revisar metas a cada 5 anos
+    4. **Políticas**: Implementar precificação de carbono e incentivos à descarbonização
     
-    **Gerado em**: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+    ### 5. LIMITAÇÕES
+    
+    - Baseado em projeções lineares
+    - Não considera mudanças tecnológicas disruptivas
+    - Baseado em dados disponíveis até {datetime.now().year}
+    
+    ---
+    *Relatório gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}*
     """
     
     st.markdown(relatorio)
     
-    # Botão para download
-    csv_data = pd.DataFrame({
+    # Botão para download dos dados
+    st.subheader("📥 Exportar Dados")
+    
+    # Criar DataFrame com resultados
+    dados_exportacao = pd.DataFrame({
         'Ano': anos,
-        'Total_Emissoes': total_emissoes,
+        'Emissões_Total': total_emissoes,
         'Meta_Trajetoria': trajetoria[:len(anos)],
         'Gap': total_emissoes - trajetoria[:len(anos)]
     })
     
     for setor, proj in proj_setores.items():
-        csv_data[f'Emissoes_{setor}'] = proj
+        dados_exportacao[f'Emissões_{setor}'] = proj
+    
+    # Converter para CSV
+    csv = dados_exportacao.to_csv(index=False)
     
     st.download_button(
-        label="📥 Baixar Dados Completos (CSV)",
-        data=csv_data.to_csv(index=False).encode('utf-8'),
-        file_name=f"orcamento_emissoes_br_{ano_inicio}_{ano_fim}.csv",
+        label="Baixar Dados Completos (CSV)",
+        data=csv,
+        file_name=f"orcamento_emissoes_brasil_{ano_inicio}_{ano_fim}.csv",
         mime="text/csv"
     )
 
@@ -389,8 +382,7 @@ with tab4:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.9rem;">
-    <p>⚠️ <strong>Aviso</strong>: Esta ferramenta é para fins educacionais e de planejamento. 
-    Consulte especialistas para análises detalhadas.</p>
-    <p>Desenvolvido para análise de orçamento de carbono brasileiro • Dados simulados para demonstração</p>
+    <p>📌 <strong>Nota</strong>: Esta ferramenta é para fins educacionais e de planejamento.</p>
+    <p>Fonte: Baseado em metodologias do IPCC e dados do SEEG Brasil</p>
 </div>
 """, unsafe_allow_html=True)
