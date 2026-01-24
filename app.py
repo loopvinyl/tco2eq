@@ -1,318 +1,424 @@
+# app.py - Dashboard de Análise de Emissões SEEG
 import streamlit as st
-import numpy as np
 import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
-import math
+import warnings
+warnings.filterwarnings('ignore')
 
 # Configuração da página
 st.set_page_config(
-    page_title="Calculadora de Orçamento de Carbono",
-    page_icon="🌳",
-    layout="wide"
+    page_title="Dashboard SEEG - Emissões de GEE",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Título principal
-st.title("🌍 Calculadora de Orçamento de Emissões - Brasil")
+# Funções auxiliares
+@st.cache_data
+def carregar_dados():
+    """Carrega e prepara os dados do SEEG"""
+    try:
+        df = pd.read_csv('SEEG.csv', encoding='utf-8')
+        
+        # Transpor os dados para ter anos como linhas
+        df_transposed = df.set_index('Categoria').T.reset_index()
+        df_transposed = df_transposed.rename(columns={'index': 'Ano'})
+        df_transposed['Ano'] = pd.to_numeric(df_transposed['Ano'])
+        
+        return df, df_transposed
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {str(e)}")
+        return None, None
 
-# Barra lateral para parâmetros
-with st.sidebar:
-    st.header("⚙️ Configurações")
-    
-    st.subheader("Período de Análise")
-    ano_inicio = st.number_input("Ano Inicial", 1990, 2030, 2020)
-    ano_fim = st.number_input("Ano Final", 2021, 2100, 2050)
-    
-    st.subheader("Emissões Atuais")
-    emissao_atual = st.number_input("Emissões atuais (MtCO₂e/ano)", 100.0, 5000.0, 1500.0, 50.0)
-    
-    st.subheader("Taxas de Crescimento (%/ano)")
-    taxa_energia = st.slider("Energia", -10.0, 10.0, 1.5, 0.1)
-    taxa_agropecuaria = st.slider("Agropecuária", -10.0, 10.0, 0.8, 0.1)
-    taxa_mudanca_solo = st.slider("Mudança Uso Solo", -20.0, 10.0, -3.0, 0.5)
-    taxa_industrial = st.slider("Processos Industriais", -5.0, 5.0, 0.5, 0.1)
-    taxa_residuos = st.slider("Resíduos", -5.0, 5.0, 1.0, 0.1)
-    
-    st.subheader("Meta de Redução")
-    meta_reducao = st.slider("Redução até 2050 (%)", 0, 100, 50, 5)
-    
-    st.subheader("Análise de Sensibilidade")
-    realizar_sensibilidade = st.checkbox("Realizar análise de sensibilidade", value=True)
-    if realizar_sensibilidade:
-        n_simulacoes = st.slider("Número de simulações", 10, 500, 100)
+def formatar_numero(valor):
+    """Formata números para exibição amigável"""
+    if valor >= 1e9:
+        return f"R$ {valor/1e9:.2f} Bilhões"
+    elif valor >= 1e6:
+        return f"R$ {valor/1e6:.2f} Milhões"
+    elif valor >= 1e3:
+        return f"R$ {valor/1e3:.2f} Mil"
+    else:
+        return f"R$ {valor:.2f}"
 
-# Funções de cálculo
-def calcular_projecao(ano_inicio, ano_fim, emissao_atual, taxas):
-    """Calcula projeção de emissões"""
-    anos = list(range(ano_inicio, ano_fim + 1))
-    n_anos = len(anos)
-    
-    # Distribuição setorial
-    distribuicao = {
-        'Energia': 0.45,
-        'Agropecuária': 0.25,
-        'Mudança Uso Solo': 0.20,
-        'Processos Industriais': 0.07,
-        'Resíduos': 0.03
-    }
-    
-    # Calcular emissões por setor
-    emissoes_setores = {}
-    for setor, proporcao in distribuicao.items():
-        emissao_inicial = emissao_atual * proporcao
-        taxa = taxas[setor]
-        emissoes = []
-        for t in range(n_anos):
-            emissao = emissao_inicial * ((1 + taxa/100) ** t)
-            emissoes.append(emissao)
-        emissoes_setores[setor] = emissoes
-    
-    # Calcular total
-    emissoes_total = []
-    for i in range(n_anos):
-        total_ano = sum(emissoes_setores[setor][i] for setor in emissoes_setores)
-        emissoes_total.append(total_ano)
-    
-    return anos, emissoes_setores, emissoes_total
-
-def calcular_meta(emissao_atual, meta_reducao, anos):
-    """Calcula trajetória de meta"""
-    emissao_2050 = emissao_atual * (1 - meta_reducao/100)
-    trajetoria = []
-    
-    for ano in anos:
-        if ano <= 2050:
-            # Redução linear até 2050
-            progresso = (ano - anos[0]) / (2050 - anos[0])
-            emissao_meta = emissao_atual + (emissao_2050 - emissao_atual) * progresso
+def calcular_crescimento(df, ano_inicio, ano_fim):
+    """Calcula crescimento entre dois anos"""
+    crescimentos = {}
+    for categoria in df['Categoria'].unique():
+        valor_inicio = df.loc[df['Categoria'] == categoria, str(ano_inicio)].values[0]
+        valor_fim = df.loc[df['Categoria'] == categoria, str(ano_fim)].values[0]
+        
+        if valor_inicio != 0:
+            crescimento = ((valor_fim - valor_inicio) / valor_inicio) * 100
         else:
-            emissao_meta = emissao_2050
-        trajetoria.append(emissao_meta)
-    
-    return trajetoria
-
-def calcular_orcamento(emissoes, anos):
-    """Calcula orçamento de carbono acumulado"""
-    orcamento = 0
-    for i in range(1, len(anos)):
-        area = (emissoes[i] + emissoes[i-1]) * (anos[i] - anos[i-1]) / 2
-        orcamento += area
-    return orcamento
-
-def analise_sensibilidade_monte_carlo(n_simulacoes, taxas_base, emissao_atual, ano_fim):
-    """Análise de sensibilidade simplificada"""
-    resultados = []
-    nomes_setores = list(taxas_base.keys())
-    
-    for _ in range(n_simulacoes):
-        # Gerar taxas aleatórias com ±50% de variação
-        taxas_aleatorias = {}
-        for setor, taxa in taxas_base.items():
-            variacao = np.random.uniform(-0.5, 0.5)  # ±50%
-            taxas_aleatorias[setor] = taxa * (1 + variacao)
+            crescimento = 0
         
-        # Calcular emissão final
-        anos = [2020, ano_fim]
-        _, _, emissao_final = calcular_projecao(2020, ano_fim, emissao_atual, taxas_aleatorias)
-        
-        resultados.append({
-            'taxas': taxas_aleatorias,
-            'emissao_final': emissao_final[-1]
-        })
-    
-    return resultados
-
-# Dicionário de taxas
-taxas = {
-    'Energia': taxa_energia,
-    'Agropecuária': taxa_agropecuaria,
-    'Mudança Uso Solo': taxa_mudanca_solo,
-    'Processos Industriais': taxa_industrial,
-    'Resíduos': taxa_residuos
-}
-
-# Cálculos principais
-anos, emissoes_setores, emissoes_total = calcular_projecao(
-    ano_inicio, ano_fim, emissao_atual, taxas
-)
-
-trajetoria_meta = calcular_meta(emissao_atual, meta_reducao, anos)
-orcamento_total = calcular_orcamento(emissoes_total, anos)
-orcamento_meta = calcular_orcamento(trajetoria_meta, anos)
-orcamento_restante = max(0, orcamento_meta - orcamento_total)
-
-# Exibir métricas principais
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric(
-        "Orçamento Restante",
-        f"{orcamento_restante:,.0f} MtCO₂",
-        f"{orcamento_restante/orcamento_meta*100:.1f}%"
-    )
-
-with col2:
-    emissao_final = emissoes_total[-1]
-    meta_final = trajetoria_meta[-1]
-    delta = ((emissao_final - meta_final) / meta_final * 100) if meta_final > 0 else 0
-    st.metric(
-        "Emissões 2050",
-        f"{emissao_final:,.0f} MtCO₂",
-        f"{delta:+.1f}%"
-    )
-
-with col3:
-    reducao_necessaria = (emissao_atual - meta_final) / (2050 - ano_inicio)
-    st.metric(
-        "Redução Necessária/Ano",
-        f"{reducao_necessaria:,.0f} MtCO₂",
-        f"{(reducao_necessaria/emissao_atual*100):.1f}%/ano"
-    )
-
-# Tabs para diferentes visualizações
-tab1, tab2, tab3 = st.tabs(["📊 Gráficos", "📈 Dados", "📋 Relatório"])
-
-with tab1:
-    st.subheader("Projeção de Emissões")
-    
-    # Criar DataFrame para gráfico
-    df_grafico = pd.DataFrame({
-        'Ano': anos,
-        'Projeção': emissoes_total,
-        'Meta': trajetoria_meta
-    })
-    
-    # Gráfico de linha usando streamlit
-    st.line_chart(df_grafico.set_index('Ano'))
-    
-    # Gráfico de barras por setor
-    st.subheader("Contribuição por Setor")
-    
-    # Dados do último ano
-    dados_setores = {}
-    for setor, emissoes in emissoes_setores.items():
-        dados_setores[setor] = emissoes[-1]
-    
-    df_setores = pd.DataFrame({
-        'Setor': list(dados_setores.keys()),
-        'Emissões': list(dados_setores.values())
-    })
-    
-    st.bar_chart(df_setores.set_index('Setor'))
-
-with tab2:
-    st.subheader("Dados Detalhados")
-    
-    # Criar DataFrame com todos os dados
-    dados = []
-    for i, ano in enumerate(anos):
-        linha = {
-            'Ano': ano,
-            'Total': emissoes_total[i],
-            'Meta': trajetoria_meta[i],
-            'Gap': emissoes_total[i] - trajetoria_meta[i]
+        crescimentos[categoria] = {
+            'inicio': valor_inicio,
+            'fim': valor_fim,
+            'crescimento': crescimento,
+            'absoluto': valor_fim - valor_inicio
         }
-        for setor in emissoes_setores:
-            linha[setor] = emissoes_setores[setor][i]
-        dados.append(linha)
     
-    df_detalhado = pd.DataFrame(dados)
-    st.dataframe(df_detalhado)
-    
-    # Botão para download
-    csv = df_detalhado.to_csv(index=False)
-    st.download_button(
-        "📥 Baixar Dados (CSV)",
-        csv,
-        f"orcamento_carbono_{datetime.now().strftime('%Y%m%d')}.csv",
-        "text/csv"
-    )
+    return crescimentos
 
-with tab3:
-    st.subheader("Relatório de Análise")
+# Interface principal
+def main():
+    # Cabeçalho
+    st.title("🌍 Dashboard de Análise - Emissões SEEG")
+    st.markdown("""
+    Sistema de Estimativas de Emissões de Gases de Efeito Estufa
+    *Análise de dados de 1990 a 2024*
+    """)
     
-    # Gerar relatório
-    relatorio = f"""
-    ## Relatório de Orçamento de Carbono
+    # Carregar dados
+    df, df_transposed = carregar_dados()
     
-    ### Configurações da Simulação
-    - **Período**: {ano_inicio} - {ano_fim}
-    - **Emissões iniciais**: {emissao_atual:,.0f} MtCO₂e/ano
-    - **Meta de redução**: {meta_reducao}% até 2050
+    if df is None:
+        st.warning("Não foi possível carregar os dados. Verifique se o arquivo SEEG.csv está na pasta correta.")
+        return
     
-    ### Resultados Principais
-    1. **Orçamento de carbono restante**: {orcamento_restante:,.0f} MtCO₂
-    2. **Emissões em {ano_fim}**: {emissao_final:,.0f} MtCO₂e
-    3. **Meta para {ano_fim}**: {meta_final:,.0f} MtCO₂e
-    4. **Gap em {ano_fim}**: {emissao_final - meta_final:,.0f} MtCO₂e
+    # Sidebar
+    with st.sidebar:
+        st.header("⚙️ Configurações")
+        
+        st.subheader("Filtros de Análise")
+        ano_min = int(df_transposed['Ano'].min())
+        ano_max = int(df_transposed['Ano'].max())
+        
+        anos_selecionados = st.slider(
+            "Período de Análise",
+            min_value=ano_min,
+            max_value=ano_max,
+            value=(2010, 2024),
+            step=1
+        )
+        
+        todas_categorias = df['Categoria'].unique().tolist()
+        categorias_selecionadas = st.multiselect(
+            "Categorias para Análise",
+            options=todas_categorias,
+            default=todas_categorias
+        )
+        
+        st.subheader("Métricas de Exibição")
+        mostrar_valores = st.checkbox("Mostrar valores numéricos", value=True)
+        usar_log = st.checkbox("Usar escala logarítmica", value=False)
+        
+        st.markdown("---")
+        st.info(f"""
+        **Informações do Dataset:**
+        - {len(df)} categorias de emissão
+        - Período: {ano_min} - {ano_max}
+        - Total de anos: {len(df_transposed)}
+        """)
     
-    ### Contribuição Setorial ({ano_fim})
-    """
+    # Layout principal
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Visão Geral",
+        "📈 Análise Temporal",
+        "🔍 Comparativo",
+        "📋 Dados Brutos"
+    ])
     
-    for setor, emissao in dados_setores.items():
-        percentual = (emissao / emissao_final * 100) if emissao_final > 0 else 0
-        relatorio += f"\n- **{setor}**: {emissao:,.0f} MtCO₂e ({percentual:.1f}%)"
+    with tab1:
+        # Visão Geral
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            ano_atual = df_transposed['Ano'].max()
+            st.metric(
+                "Ano Mais Recente",
+                ano_atual,
+                delta=f"{ano_max - ano_min} anos de dados"
+            )
+        
+        with col2:
+            total_emissao = df[str(ano_atual)].sum()
+            st.metric(
+                "Emissões Totais (Último Ano)",
+                formatar_numero(total_emissao),
+                delta="Todos os setores"
+            )
+        
+        with col3:
+            maior_setor = df.loc[df[str(ano_atual)].idxmax(), 'Categoria']
+            maior_valor = df[str(ano_atual)].max()
+            st.metric(
+                "Maior Emissor (Atual)",
+                maior_setor,
+                delta=formatar_numero(maior_valor)
+            )
+        
+        # Gráfico de pizza do último ano
+        st.subheader(f"Distribuição das Emissões por Setor ({ano_atual})")
+        
+        fig_pizza = px.pie(
+            df,
+            values=str(ano_atual),
+            names='Categoria',
+            color='Categoria',
+            hover_data=[str(ano_atual)],
+            labels={'Categoria': 'Setor', str(ano_atual): 'Emissões'}
+        )
+        
+        fig_pizza.update_traces(
+            textposition='inside',
+            textinfo='percent+label',
+            hovertemplate='<b>%{label}</b><br>Emissões: %{value:,.0f}<br>Percentual: %{percent}'
+        )
+        
+        fig_pizza.update_layout(
+            height=500,
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.3,
+                xanchor="center",
+                x=0.5
+            )
+        )
+        
+        st.plotly_chart(fig_pizza, use_container_width=True)
     
-    relatorio += f"""
+    with tab2:
+        # Análise Temporal
+        st.subheader("Evolução Temporal das Emissões")
+        
+        # Preparar dados para gráfico de linha
+        df_analise = df[df['Categoria'].isin(categorias_selecionadas)]
+        
+        # Criar DataFrame para Plotly
+        anos_lista = [str(ano) for ano in range(anos_selecionados[0], anos_selecionados[1] + 1)]
+        
+        plot_data = []
+        for _, row in df_analise.iterrows():
+            categoria = row['Categoria']
+            for ano in anos_lista:
+                plot_data.append({
+                    'Categoria': categoria,
+                    'Ano': int(ano),
+                    'Emissões': row[ano]
+                })
+        
+        df_plot = pd.DataFrame(plot_data)
+        
+        # Gráfico de linha
+        fig_linha = px.line(
+            df_plot,
+            x='Ano',
+            y='Emissões',
+            color='Categoria',
+            title=f"Evolução das Emissões ({anos_selecionados[0]} - {anos_selecionados[1]})",
+            markers=True,
+            line_shape='spline'
+        )
+        
+        if usar_log:
+            fig_linha.update_yaxes(type="log")
+        
+        fig_linha.update_layout(
+            height=500,
+            hovermode='x unified',
+            xaxis=dict(tickmode='linear', dtick=2),
+            yaxis_title="Emissões (unidades)",
+            xaxis_title="Ano"
+        )
+        
+        st.plotly_chart(fig_linha, use_container_width=True)
+        
+        # Gráfico de área
+        st.subheader("Contribuição Acumulada por Setor")
+        
+        fig_area = px.area(
+            df_plot,
+            x='Ano',
+            y='Emissões',
+            color='Categoria',
+            title="Evolução da Contribuição por Setor",
+            groupnorm='percent'
+        )
+        
+        fig_area.update_layout(
+            height=400,
+            yaxis_title="Percentual das Emissões Totais (%)",
+            xaxis_title="Ano"
+        )
+        
+        st.plotly_chart(fig_area, use_container_width=True)
     
-    ### Recomendações
-    
-    1. **Ações prioritárias**: Concentrar esforços nos setores com maior contribuição
-    2. **Taxa de redução**: Necessário reduzir {reducao_necessaria/emissao_atual*100:.1f}% ao ano
-    3. **Monitoramento**: Acompanhar indicadores anualmente
-    4. **Políticas**: Implementar medidas específicas por setor
-    
-    ---
-    *Relatório gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}*
-    """
-    
-    st.markdown(relatorio)
-
-# Análise de sensibilidade
-if realizar_sensibilidade and 'n_simulacoes' in locals():
-    st.divider()
-    st.subheader("🔬 Análise de Sensibilidade")
-    
-    if st.button("Executar Simulações"):
-        with st.spinner(f"Executando {n_simulacoes} simulações..."):
-            resultados = analise_sensibilidade_monte_carlo(
-                n_simulacoes, taxas, emissao_atual, ano_fim
+    with tab3:
+        # Análise Comparativa
+        st.subheader("Análise Comparativa entre Períodos")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            ano_comparacao1 = st.selectbox(
+                "Ano Inicial para Comparação",
+                options=sorted(df_transposed['Ano'].unique()),
+                index=0
+            )
+        
+        with col2:
+            ano_comparacao2 = st.selectbox(
+                "Ano Final para Comparação",
+                options=sorted(df_transposed['Ano'].unique()),
+                index=len(df_transposed['Ano'].unique()) - 1
+            )
+        
+        if ano_comparacao1 and ano_comparacao2:
+            # Calcular crescimento
+            crescimentos = calcular_crescimento(df, ano_comparacao1, ano_comparacao2)
+            
+            # Criar DataFrame para exibição
+            comparacao_data = []
+            for categoria, dados in crescimentos.items():
+                comparacao_data.append({
+                    'Categoria': categoria,
+                    f'Emissões {ano_comparacao1}': dados['inicio'],
+                    f'Emissões {ano_comparacao2}': dados['fim'],
+                    'Variação Absoluta': dados['absoluto'],
+                    'Variação Percentual (%)': dados['crescimento']
+                })
+            
+            df_comparacao = pd.DataFrame(comparacao_data)
+            
+            # Exibir tabela
+            st.dataframe(
+                df_comparacao.style.format({
+                    f'Emissões {ano_comparacao1}': '{:,.0f}',
+                    f'Emissões {ano_comparacao2}': '{:,.0f}',
+                    'Variação Absoluta': '{:,.0f}',
+                    'Variação Percentual (%)': '{:.2f}%'
+                }).background_gradient(
+                    subset=['Variação Percentual (%)'],
+                    cmap='RdYlGn'
+                ),
+                use_container_width=True
             )
             
-            # Extrair resultados
-            emissoes_finais = [r['emissao_final'] for r in resultados]
+            # Gráfico de barras comparativo
+            st.subheader(f"Comparação: {ano_comparacao1} vs {ano_comparacao2}")
             
-            # Estatísticas
-            media = np.mean(emissoes_finais)
-            mediana = np.percentile(emissoes_finais, 50)
-            p10 = np.percentile(emissoes_finais, 10)
-            p90 = np.percentile(emissoes_finais, 90)
+            fig_comparacao = go.Figure()
             
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Média", f"{media:,.0f}")
-            with col2:
-                st.metric("Mediana", f"{mediana:,.0f}")
-            with col3:
-                st.metric("P10", f"{p10:,.0f}")
-            with col4:
-                st.metric("P90", f"{p90:,.0f}")
+            for i, categoria in enumerate(categorias_selecionadas):
+                if categoria in crescimentos:
+                    fig_comparacao.add_trace(go.Bar(
+                        name=f'{categoria} - {ano_comparacao1}',
+                        x=[categoria],
+                        y=[crescimentos[categoria]['inicio']],
+                        marker_color=px.colors.qualitative.Set1[i],
+                        showlegend=True,
+                        hovertemplate='<b>%{x}</b><br>Ano: ' + str(ano_comparacao1) + '<br>Emissões: %{y:,.0f}'
+                    ))
+                    
+                    fig_comparacao.add_trace(go.Bar(
+                        name=f'{categoria} - {ano_comparacao2}',
+                        x=[categoria],
+                        y=[crescimentos[categoria]['fim']],
+                        marker_color=px.colors.qualitative.Set2[i],
+                        showlegend=True,
+                        hovertemplate='<b>%{x}</b><br>Ano: ' + str(ano_comparacao2) + '<br>Emissões: %{y:,.0f}'
+                    ))
             
-            # Histograma simples
-            st.subheader("Distribuição das Emissões Finais")
+            fig_comparacao.update_layout(
+                barmode='group',
+                height=500,
+                title=f"Comparação entre {ano_comparacao1} e {ano_comparacao2}",
+                yaxis_title="Emissões",
+                xaxis_title="Categoria"
+            )
             
-            # Criar histograma usando pandas
-            hist_data = pd.DataFrame({'Emissões Finais': emissoes_finais})
-            st.bar_chart(hist_data)
+            st.plotly_chart(fig_comparacao, use_container_width=True)
+    
+    with tab4:
+        # Dados Brutos
+        st.subheader("Dados Completos do SEEG")
+        
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            formato_exibicao = st.radio(
+                "Formato de Exibição",
+                ["Original (Anos como colunas)", "Transposto (Anos como linhas)"],
+                index=0
+            )
+        
+        if formato_exibicao == "Original (Anos como colunas)":
+            st.dataframe(
+                df.style.format(lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) else x),
+                use_container_width=True
+            )
+            
+            # Botão para download
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download dos Dados (CSV)",
+                data=csv,
+                file_name="SEEG_dados_completos.csv",
+                mime="text/csv"
+            )
+        else:
+            st.dataframe(
+                df_transposed.style.format(lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) else x),
+                use_container_width=True
+            )
+        
+        # Estatísticas descritivas
+        st.subheader("Estatísticas Descritivas")
+        
+        anos_para_analise = [str(ano) for ano in range(anos_selecionados[0], anos_selecionados[1] + 1)]
+        df_estatisticas = df[['Categoria'] + anos_para_analise]
+        
+        estatisticas = []
+        for categoria in df_estatisticas['Categoria']:
+            dados_categoria = df_estatisticas[df_estatisticas['Categoria'] == categoria].iloc[0, 1:].values
+            estatisticas.append({
+                'Categoria': categoria,
+                'Média': np.mean(dados_categoria),
+                'Mediana': np.median(dados_categoria),
+                'Desvio Padrão': np.std(dados_categoria),
+                'Mínimo': np.min(dados_categoria),
+                'Máximo': np.max(dados_categoria),
+                'Crescimento Total': dados_categoria[-1] - dados_categoria[0],
+                'Taxa Crescimento (%)': ((dados_categoria[-1] - dados_categoria[0]) / dados_categoria[0] * 100) if dados_categoria[0] != 0 else 0
+            })
+        
+        df_stats = pd.DataFrame(estatisticas)
+        st.dataframe(
+            df_stats.style.format({
+                'Média': '{:,.0f}',
+                'Mediana': '{:,.0f}',
+                'Desvio Padrão': '{:,.0f}',
+                'Mínimo': '{:,.0f}',
+                'Máximo': '{:,.0f}',
+                'Crescimento Total': '{:,.0f}',
+                'Taxa Crescimento (%)': '{:.2f}%'
+            }),
+            use_container_width=True
+        )
+    
+    # Rodapé
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.caption("📊 **Dashboard SEEG**")
+        st.caption("Versão 1.0 - Análise de Emissões")
+    
+    with col2:
+        st.caption("🔄 **Dados Atualizados**")
+        st.caption(f"Período: {ano_min} - {ano_max}")
+    
+    with col3:
+        st.caption("🔍 **Análise Completa**")
+        st.caption("5 categorias | 35 anos de dados")
 
-# Informações finais
-st.divider()
-st.info("""
-**Sobre esta ferramenta**: 
-Esta calculadora estima o orçamento de carbono disponível para o Brasil 
-considerando diferentes cenários de emissões e metas de redução.
-
-**Metodologia**:
-- Projeções baseadas em crescimento composto por setor
-- Meta de redução linear até 2050
-- Cálculo de orçamento por integração numérica simples
-""")
+if __name__ == "__main__":
+    main()
