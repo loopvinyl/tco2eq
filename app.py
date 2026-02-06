@@ -19,7 +19,7 @@ st.markdown("""
 # Title and Introduction
 st.title("🌱 Nutriwash: Smart Waste Management")
 st.markdown("""
-    **Location: Ribeirão Preto, Brazil** Real-time monitoring of anaerobic reactors installed at fruit and vegetable retailers.  
+    **Location: Ribeirão Preto, Brazil** Real-time monitoring of anaerobic reactors.  
     *Total sealing technology ensuring zero pre-disposal methane emissions.*
 """)
 
