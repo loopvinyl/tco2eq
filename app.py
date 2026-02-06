@@ -2,76 +2,97 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Configuração da página
-st.set_page_config(page_title="Nutriwash Dashboard", layout="wide", page_icon="🌱")
+# Page Configuration
+st.set_page_config(page_title="Nutriwash | Waste-to-Value", layout="wide", page_icon="🌱")
 
-# Título e Introdução
-st.title("🌱 Nutriwash: Gestão Inteligente de Resíduos")
+# Custom CSS for a cleaner look
 st.markdown("""
-    **Operação: Ribeirão Preto/SP** Monitoramento em tempo real dos reatores anaeróbicos instalados em varejistas de frutas e vegetais.
-    *Tecnologia de vedação total para zero emissões pré-descarte.*
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Title and Introduction
+st.title("🌱 Nutriwash: Smart Waste Management")
+st.markdown("""
+    **Location: Ribeirão Preto, Brazil** Real-time monitoring of anaerobic reactors installed at fruit and vegetable retailers.  
+    *Total sealing technology ensuring zero pre-disposal methane emissions.*
 """)
 
-# --- SIMULAÇÃO DE DADOS ---
+# --- DATA SIMULATION ---
 @st.cache_data
 def load_data():
-    # Simulando 30 dias de operação
+    # Simulating 30 days of operations
     dates = pd.date_range(end=datetime.now(), periods=30)
+    # We maintain the 100kg average as requested
     data = pd.DataFrame({
-        'Data': dates,
-        'Coleta (kg)': np.random.normal(100, 5, 30), # Média de 100kg conforme solicitado
-        'Emissões Evitadas (kg CO2e)': np.random.normal(45, 3, 30),
-        'Eficiência do Reator (%)': np.random.uniform(95, 99.8, 30)
+        'Date': dates,
+        'Collected Waste (kg)': np.random.normal(100, 3, 30), 
+        'Avoided Emissions (kg CO2e)': np.random.normal(42, 2, 30),
+        'Reactor Efficiency (%)': np.random.uniform(98.5, 99.9, 30)
     })
     return data
 
 df = load_data()
 
-# --- SIDEBAR (Filtros e Info) ---
-st.sidebar.header("Configurações do Painel")
-unidade = st.sidebar.selectbox("Selecione a Unidade", ["Todos os Varejistas", "Ceasa Ribeirão", "Rede Local A", "Hortifruti B"])
-st.sidebar.info(f"Status do Reator: **Operacional** 🟢\n\nVedação: **100% Hermético**")
+# --- SIDEBAR ---
+st.sidebar.header("Dashboard Settings")
+unit_filter = st.sidebar.selectbox("Select Unit", ["All Retailers", "Ceasa RP", "Local Network A", "Green Market B"])
+st.sidebar.divider()
+st.sidebar.write("**Reactor Status:** 🟢 Operational")
+st.sidebar.write("**Sealing Integrity:** 100% Hermetic")
+st.sidebar.info("Since the project started, 100% of the collected organic waste has been diverted from landfills.")
 
-# --- MÉTRICAS PRINCIPAIS ---
+# --- KEY METRICS ---
 col1, col2, col3 = st.columns(3)
-total_coletado = df['Coleta (kg)'].sum()
-media_diaria = df['Coleta (kg)'].mean()
+current_total = df['Collected Waste (kg)'].sum()
+avg_daily = df['Collected Waste (kg)'].mean()
 
-col1.metric("Total Coletado (Mês)", f"{total_coletado:,.0f} kg", "+12%")
-col2.metric("Média Diária", f"{media_diaria:.1f} kg", "Meta batida")
-col3.metric("Emissões de Metano Retidas", "99.9%", "Tecnologia Nutriwash")
+with col1:
+    st.metric("Total Collected (30d)", f"{current_total:,.0f} kg", "Target Met")
+with col2:
+    # Highlighting the 100kg requirement
+    st.metric("Daily Average", f"{avg_daily:.1f} kg", "Target: 100kg/day")
+with col3:
+    st.metric("Methane Capture Rate", "99.9%", "Proprietary Tech")
 
 st.divider()
 
-# --- GRÁFICOS ---
+# --- CHARTS ---
 c1, c2 = st.columns(2)
 
 with c1:
-    st.subheader("Volume de Coleta Diária (kg)")
-    fig_coleta = px.line(df, x='Data', y='Coleta (kg)', markers=True, 
+    st.subheader("Daily Collection Volume (kg)")
+    fig_coleta = px.line(df, x='Date', y='Collected Waste (kg)', markers=True, 
                          color_discrete_sequence=['#2E7D32'])
-    fig_coleta.add_hline(y=100, line_dash="dot", annotation_text="Meta Diária (100kg)")
+    # Goal line at 100kg
+    fig_coleta.add_hline(y=100, line_dash="dot", 
+                         annotation_text="Daily Goal (100kg)", 
+                         annotation_position="bottom right")
     st.plotly_chart(fig_coleta, use_container_width=True)
 
 with c2:
-    st.subheader("Impacto Ambiental: CO2 Evitado")
-    fig_env = px.bar(df, x='Data', y='Emissões Evitadas (kg CO2e)', 
+    st.subheader("Environmental Impact: Avoided CO2e")
+    fig_env = px.area(df, x='Date', y='Avoided Emissions (kg CO2e)', 
                      color_discrete_sequence=['#81C784'])
     st.plotly_chart(fig_env, use_container_width=True)
 
-# --- DETALHES TÉCNICOS DOS REATORES ---
-st.subheader("Status dos Reatores nos Pontos de Coleta")
-st.write("Sensores de pressão e vedação nos varejistas parceiros:")
+# --- OPERATIONAL STATUS TABLE ---
+st.subheader("Retailer Point Status")
+st.write("Real-time sensor data from our sealed anaerobic reactors:")
 
-# Criando uma tabela fictícia de status por local
-locais_df = pd.DataFrame({
-    'Ponto de Venda': ['Varejista Centro', 'Horti-Sertãozinho', 'Mercado RP Sul', 'Quitanda da Avenida'],
-    'Capacidade Atual': ['85%', '40%', '92%', '15%'],
-    'Vedação': ['Ativa', 'Ativa', 'Ativa', 'Ativa'],
-    'Última Coleta': ['Há 2h', 'Há 5h', 'Há 30min', 'Ontem']
+status_df = pd.DataFrame({
+    'Retailer Location': ['Downtown Market', 'Sertãozinho Hub', 'RP South Grocery', 'Avenue Green Shop'],
+    'Current Capacity': ['82%', '35%', '91%', '12%'],
+    'Seal Status': ['Secured', 'Secured', 'Secured', 'Secured'],
+    'Last Pickup': ['2h ago', '5h ago', '15min ago', 'Yesterday']
 })
-st.table(locais_df)
 
-st.success("✅ Sistema operando dentro das normas ambientais de Ribeirão Preto.")
+# Displaying table without index
+st.dataframe(status_df, use_container_width=True, hide_index=True)
+
+st.success("✅ System operating under full compliance with environmental standards in Ribeirão Preto.")
