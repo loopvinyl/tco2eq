@@ -86,7 +86,7 @@ st.subheader("Retailer Point Status")
 st.write("Real-time sensor data from our sealed anaerobic reactors:")
 
 status_df = pd.DataFrame({
-    'Retailer Location': ['Downtown Market', 'Sertãozinho Hub', 'RP South Grocery', 'Avenue Green Shop'],
+    'Retailer Location': ['RP Cen', 'RP Hub', 'RP Soul', 'RP Sul'],
     'Current Capacity': ['82%', '35%', '91%', '12%'],
     'Seal Status': ['Secured', 'Secured', 'Secured', 'Secured'],
     'Last Pickup': ['2h ago', '5h ago', '15min ago', 'Yesterday']
