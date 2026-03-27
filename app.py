@@ -1020,19 +1020,18 @@ if st.session_state.get('run_simulation', False):
         }))
 
         # =============================================================================
-        # Monte Carlo para todos os cenários de GWP
+        # Monte Carlo para todos os cenários de GWP (agora com ambas as tecnologias)
         # =============================================================================
         st.subheader("🎲 Análise de Incerteza (Monte Carlo) - Comparação entre Cenários de GWP")
         
         umidade_vals, temp_vals, doc_vals = gerar_parametros_mc(n_simulations)
         
-        # Dicionário para armazenar resultados de Monte Carlo
+        # Dicionário para armazenar resultados de Monte Carlo para ambas as tecnologias
         mc_results = {}
-        
         for nome, (gwp_ch4, gwp_n2o) in gwps.items():
-            results_mc = []
+            vermi_arr = []
+            thermo_arr = []
             for i in range(n_simulations):
-                # Criar calculador com os GWPs corretos
                 calculator_mc = GHGEmissionCalculator()
                 calculator_mc.GWP_CH4_20 = gwp_ch4
                 calculator_mc.GWP_N2O_20 = gwp_n2o
@@ -1045,14 +1044,18 @@ if st.session_state.get('run_simulation', False):
                     years=anos_simulacao,
                     phi_baseline=0.85
                 )
-                results_mc.append(res['vermicomposting']['avoided_co2eq_t'])
-            mc_results[nome] = np.array(results_mc)
+                vermi_arr.append(res['vermicomposting']['avoided_co2eq_t'])
+                thermo_arr.append(res['thermophilic']['avoided_co2eq_t'])
+            mc_results[nome] = {
+                'vermicomposting': np.array(vermi_arr),
+                'thermophilic': np.array(thermo_arr)
+            }
         
-        # Plotar distribuições
+        # Plotar distribuições (mantido igual, apenas para vermicomposting)
         fig, ax = plt.subplots(figsize=(12, 6))
-        for nome, arr in mc_results.items():
-            sns.kdeplot(arr, label=nome, ax=ax, linewidth=2)
-        ax.set_title('Distribuição das Emissões Evitadas (Monte Carlo)')
+        for nome, arr_dict in mc_results.items():
+            sns.kdeplot(arr_dict['vermicomposting'], label=nome, ax=ax, linewidth=2)
+        ax.set_title('Distribuição das Emissões Evitadas (Vermicompostagem)')
         ax.set_xlabel('Emissões Evitadas (tCO₂eq)')
         ax.set_ylabel('Densidade')
         ax.legend()
@@ -1060,9 +1063,10 @@ if st.session_state.get('run_simulation', False):
         ax.xaxis.set_major_formatter(br_format)
         st.pyplot(fig)
         
-        # Tabela de estatísticas
+        # Tabela de estatísticas para vermicompostagem (mantido igual)
         stats_list = []
-        for nome, arr in mc_results.items():
+        for nome, arr_dict in mc_results.items():
+            arr = arr_dict['vermicomposting']
             stats_list.append({
                 "Cenário": nome,
                 "Média (tCO₂eq)": np.mean(arr),
@@ -1072,7 +1076,7 @@ if st.session_state.get('run_simulation', False):
                 "IC 95% Superior": np.percentile(arr, 97.5)
             })
         df_mc_stats = pd.DataFrame(stats_list)
-        st.subheader("📊 Estatísticas do Monte Carlo")
+        st.subheader("📊 Estatísticas do Monte Carlo - Vermicompostagem")
         st.dataframe(df_mc_stats.style.format({
             "Média (tCO₂eq)": lambda x: formatar_br(x),
             "Mediana (tCO₂eq)": lambda x: formatar_br(x),
@@ -1081,17 +1085,54 @@ if st.session_state.get('run_simulation', False):
             "IC 95% Superior": lambda x: formatar_br(x)
         }))
         
-        # Testes estatísticos entre os cenários (apenas exemplo)
-        if len(mc_results) >= 2:
-            # Teste t-pareado entre Otimista e Realista
-            arr_otimista = mc_results["Otimista (GWP-20)"]
-            arr_realista = mc_results["Realista (GWP-100)"]
-            t_stat, p_val = stats.ttest_rel(arr_otimista, arr_realista)
-            st.write(f"**Teste t-pareado (Otimista vs Realista):** t = {formatar_br_dec(t_stat,5)}, p = {formatar_br_dec(p_val,5)}")
-            
-            # Teste de Wilcoxon entre Otimista e Realista
-            w_stat, p_wilcox = stats.wilcoxon(arr_otimista, arr_realista)
-            st.write(f"**Teste de Wilcoxon (Otimista vs Realista):** estatística = {formatar_br_dec(w_stat,5)}, p = {formatar_br_dec(p_wilcox,5)}")
+        # =============================================================================
+        # NOVA ANÁLISE ESTATÍSTICA: Comparação Vermicompostagem vs. Compostagem
+        # =============================================================================
+        st.subheader("📊 Análise Estatística de Comparação (Vermicompostagem vs. Compostagem)")
+        
+        # Escolher um cenário de GWP para a comparação (aqui usamos o Otimista - GWP-20)
+        gwp_alvo = "Otimista (GWP-20)"
+        vermi_arr = mc_results[gwp_alvo]['vermicomposting']
+        thermo_arr = mc_results[gwp_alvo]['thermophilic']
+        
+        diferenças = vermi_arr - thermo_arr
+        
+        # Teste de normalidade (Shapiro-Wilk)
+        shapiro_stat, shapiro_p = stats.shapiro(diferenças)
+        st.write(f"**Teste de normalidade das diferenças (Shapiro‑Wilk):** Estatística = {shapiro_stat:.5f}, p‑valor = {shapiro_p:.5f}")
+        
+        # Teste t pareado
+        t_stat, t_p = stats.ttest_rel(vermi_arr, thermo_arr)
+        st.write(f"**Teste t pareado:** Estatística t = {t_stat:.5f}, p‑valor = {t_p:.5f}")
+        
+        # Teste de Wilcoxon (pareado)
+        w_stat, w_p = stats.wilcoxon(vermi_arr, thermo_arr)
+        st.write(f"**Teste de Wilcoxon (pareado):** Estatística = {w_stat:.5f}, p‑valor = {w_p:.5f}")
+        
+        # (Opcional) Tabela resumo para todos os cenários de GWP
+        st.markdown("#### Comparação em todos os cenários de GWP")
+        comparacao_stats = []
+        for nome in gwps.keys():
+            vermi = mc_results[nome]['vermicomposting']
+            thermo = mc_results[nome]['thermophilic']
+            diff = vermi - thermo
+            shapiro_p = stats.shapiro(diff)[1]
+            t_stat, t_p = stats.ttest_rel(vermi, thermo)
+            w_stat, w_p = stats.wilcoxon(vermi, thermo)
+            comparacao_stats.append({
+                "Cenário GWP": nome,
+                "Diferença média (tCO₂eq)": np.mean(diff),
+                "p‑normalidade": shapiro_p,
+                "p‑t pareado": t_p,
+                "p‑Wilcoxon": w_p
+            })
+        df_comp_stats = pd.DataFrame(comparacao_stats)
+        st.dataframe(df_comp_stats.style.format({
+            "Diferença média (tCO₂eq)": lambda x: formatar_br(x),
+            "p‑normalidade": lambda x: f"{x:.5f}",
+            "p‑t pareado": lambda x: f"{x:.5f}",
+            "p‑Wilcoxon": lambda x: f"{x:.5f}"
+        }))
         
         st.subheader("📋 Resultados Anuais - Proposta da Tese (Cenário Otimista)")
 
