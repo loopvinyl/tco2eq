@@ -260,9 +260,19 @@ class GHGEmissionCalculator:
         return results
 
 # =============================================================================
-# Funções auxiliares (cotações, formatação) - idênticas ao original
+# Funções auxiliares (cotações, formatação) - VERSÃO MELHORADA
 # =============================================================================
 def obter_cotacao_carbono_investing():
+    """
+    Obtém a cotação do carbono (EUA) a partir do Investing.com e, se falhar,
+    tenta o MarketWatch. Em último caso, retorna um valor de referência.
+    """
+    # Tentativa 1: Investing.com
+    preco = None
+    fonte = "Investing.com"
+    moeda = "€"
+    contrato = "Carbon Emissions Future"
+
     try:
         url = "https://www.investing.com/commodities/carbon-emissions"
         headers = {
@@ -271,13 +281,12 @@ def obter_cotacao_carbono_investing():
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Referer': 'https://www.investing.com/'
         }
-        
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
-        
         soup = BeautifulSoup(response.content, 'html.parser')
-        
-        selectores = [
+
+        # Lista de seletores comuns para o preço
+        selectors = [
             '[data-test="instrument-price-last"]',
             '.text-2xl',
             '.last-price-value',
@@ -287,56 +296,64 @@ def obter_cotacao_carbono_investing():
             '.top.bold.inlineblock',
             '#last_last'
         ]
-        
-        preco = None
-        fonte = "Investing.com"
-        
-        for seletor in selectores:
-            try:
-                elemento = soup.select_one(seletor)
-                if elemento:
-                    texto_preco = elemento.text.strip().replace(',', '')
-                    texto_preco = ''.join(c for c in texto_preco if c.isdigit() or c == '.')
-                    if texto_preco:
-                        preco = float(texto_preco)
+        for sel in selectors:
+            elemento = soup.select_one(sel)
+            if elemento:
+                texto = elemento.text.strip().replace(',', '')
+                texto = ''.join(c for c in texto if c.isdigit() or c == '.')
+                if texto:
+                    preco = float(texto)
+                    break
+
+        # Se não encontrou nos seletores, tenta extrair de um script JSON
+        if preco is None:
+            scripts = soup.find_all('script')
+            for script in scripts:
+                if script.string and 'lastPrice' in script.string:
+                    import re
+                    match = re.search(r'"lastPrice":\s*([\d.]+)', script.string)
+                    if match:
+                        preco = float(match.group(1))
                         break
-            except (ValueError, AttributeError):
-                continue
-        
-        if preco is not None:
-            return preco, "€", "Carbon Emissions Future", True, fonte
-        
-        import re
-        padroes_preco = [
-            r'"last":"([\d,]+)"',
-            r'data-last="([\d,]+)"',
-            r'last_price["\']?:\s*["\']?([\d,]+)',
-            r'value["\']?:\s*["\']?([\d,]+)'
-        ]
-        
-        html_texto = str(soup)
-        for padrao in padroes_preco:
-            matches = re.findall(padrao, html_texto)
-            for match in matches:
-                try:
-                    preco_texto = match.replace(',', '')
-                    preco = float(preco_texto)
-                    if 50 < preco < 200:
-                        return preco, "€", "Carbon Emissions Future", True, fonte
-                except ValueError:
-                    continue
-                    
-        return None, None, None, False, fonte
-        
+
+        if preco is not None and 20 < preco < 200:  # faixa plausível
+            return preco, moeda, contrato, True, fonte
+
     except Exception as e:
-        return None, None, None, False, f"Investing.com - Erro: {str(e)}"
+        pass  # Silencia erro para não poluir log
+
+    # Tentativa 2: MarketWatch (preço em USD)
+    try:
+        url = "https://www.marketwatch.com/investing/future/keua"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Seletor comum no MarketWatch para o preço
+        price_elem = soup.select_one('bg-quote[field="last"]')
+        if price_elem:
+            preco_text = price_elem.text.strip().replace(',', '')
+            preco = float(preco_text)
+            if preco > 0:
+                return preco, "$", "KEUA (ICE)", True, "MarketWatch"
+        # Fallback: elemento com classe 'value'
+        price_elem = soup.select_one('.value')
+        if price_elem:
+            preco_text = price_elem.text.strip().replace(',', '')
+            preco = float(preco_text)
+            if preco > 0:
+                return preco, "$", "KEUA (ICE)", True, "MarketWatch"
+    except Exception as e:
+        pass
+
+    # Se tudo falhar, retorna um valor de referência atualizado manualmente
+    # (pode ser atualizado periodicamente com base em fontes confiáveis)
+    return 85.50, "€", "Carbon Emissions (Referência)", False, "Referência"
 
 def obter_cotacao_carbono():
     preco, moeda, contrato_info, sucesso, fonte = obter_cotacao_carbono_investing()
-    
     if sucesso:
         return preco, moeda, f"{contrato_info}", True, fonte
-    
     return 85.50, "€", "Carbon Emissions (Referência)", False, "Referência"
 
 def obter_cotacao_euro_real():
