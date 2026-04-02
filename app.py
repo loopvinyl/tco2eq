@@ -584,7 +584,7 @@ def compute_results_for_gwp(gwp_ch4, gwp_n2o, waste_kg_day, k_year, temperature_
     )
     return results
 
-def executar_simulacao_completa_sobol(params_sobol, gwp_ch4, gwp_n2o):
+def executar_simulacao_vermi_sobol(params_sobol, gwp_ch4, gwp_n2o):
     k_ano_sobol, T_sobol, DOC_sobol = params_sobol
     np.random.seed(50)
     calculator = GHGEmissionCalculator()
@@ -601,7 +601,7 @@ def executar_simulacao_completa_sobol(params_sobol, gwp_ch4, gwp_n2o):
     )
     return results['vermicomposting']['avoided_co2eq_t']
 
-def executar_simulacao_unfccc_sobol(params_sobol, gwp_ch4, gwp_n2o):
+def executar_simulacao_compostagem_sobol(params_sobol, gwp_ch4, gwp_n2o):
     k_ano_sobol, T_sobol, DOC_sobol = params_sobol
     np.random.seed(50)
     calculator = GHGEmissionCalculator()
@@ -647,7 +647,6 @@ if st.session_state.get('run_simulation', False):
             )
         
         # Usar os resultados do cenário Otimista para os gráficos e tabelas principais
-        # (podemos escolher qualquer um, mas manteremos o original)
         results = results_all["Otimista (GWP-20)"]
         
         # Gerar dados diários para gráficos (apenas GWP20)
@@ -695,24 +694,24 @@ if st.session_state.get('run_simulation', False):
         
         df_anual_revisado.rename(columns={
             'Total_Aterro_tCO2eq_dia': 'Baseline emissions (t CO₂eq)',
-            'Total_Vermi_tCO2eq_dia': 'Project emissions (t CO₂eq)',
+            'Total_Vermi_tCO2eq_dia': 'Vermicomposting emissions (t CO₂eq)',
         }, inplace=True)
         
-        # Dados para o cenário UNFCCC (compostagem termofílica) com GWP20
+        # Dados para o cenário de compostagem termofílica com GWP20
         ch4_compost_dia, n2o_compost_dia = calc_g20.calculate_thermophilic_emissions(
             residuos_kg_dia, umidade, anos_simulacao
         )
-        ch4_compost_unfccc_tco2eq = ch4_compost_dia * calc_g20.GWP_CH4_20 / 1000
-        n2o_compost_unfccc_tco2eq = n2o_compost_dia * calc_g20.GWP_N2O_20 / 1000
-        total_compost_unfccc_tco2eq_dia = ch4_compost_unfccc_tco2eq + n2o_compost_unfccc_tco2eq
+        ch4_compost_tco2eq = ch4_compost_dia * calc_g20.GWP_CH4_20 / 1000
+        n2o_compost_tco2eq = n2o_compost_dia * calc_g20.GWP_N2O_20 / 1000
+        total_compost_tco2eq_dia = ch4_compost_tco2eq + n2o_compost_tco2eq
         
-        df_comp_unfccc_dia = pd.DataFrame({
+        df_compost_dia = pd.DataFrame({
             'Data': datas,
-            'Total_Compost_tCO2eq_dia': total_compost_unfccc_tco2eq_dia
+            'Total_Compost_tCO2eq_dia': total_compost_tco2eq_dia
         })
-        df_comp_unfccc_dia['Year'] = df_comp_unfccc_dia['Data'].dt.year
+        df_compost_dia['Year'] = df_compost_dia['Data'].dt.year
         
-        df_comp_anual_revisado = df_comp_unfccc_dia.groupby('Year').agg({
+        df_comp_anual_revisado = df_compost_dia.groupby('Year').agg({
             'Total_Compost_tCO2eq_dia': 'sum'
         }).reset_index()
         
@@ -722,7 +721,7 @@ if st.session_state.get('run_simulation', False):
         
         df_comp_anual_revisado['Emission reductions (t CO₂eq)'] = df_comp_anual_revisado['Baseline emissions (t CO₂eq)'] - df_comp_anual_revisado['Total_Compost_tCO2eq_dia']
         df_comp_anual_revisado['Cumulative reduction (t CO₂eq)'] = df_comp_anual_revisado['Emission reductions (t CO₂eq)'].cumsum()
-        df_comp_anual_revisado.rename(columns={'Total_Compost_tCO2eq_dia': 'Project emissions (t CO₂eq)'}, inplace=True)
+        df_comp_anual_revisado.rename(columns={'Total_Compost_tCO2eq_dia': 'Composting emissions (t CO₂eq)'}, inplace=True)
         
         st.header("📈 Resultados da Simulação")
         
@@ -753,19 +752,19 @@ if st.session_state.get('run_simulation', False):
         }))
         
         # Exibir resultados financeiros para o cenário selecionado (Otimista)
-        total_evitado_tese = results['vermicomposting']['avoided_co2eq_t']
-        total_evitado_unfccc = results['thermophilic']['avoided_co2eq_t']
+        total_evitado_vermi = results['vermicomposting']['avoided_co2eq_t']
+        total_evitado_compost = results['thermophilic']['avoided_co2eq_t']
         
         preco_carbono = st.session_state.preco_carbono
         moeda = st.session_state.moeda_carbono
         taxa_cambio = st.session_state.taxa_cambio
         fonte_cotacao = st.session_state.fonte_cotacao
         
-        valor_tese_eur = calcular_valor_creditos(total_evitado_tese, preco_carbono, moeda)
-        valor_unfccc_eur = calcular_valor_creditos(total_evitado_unfccc, preco_carbono, moeda)
+        valor_vermi_eur = calcular_valor_creditos(total_evitado_vermi, preco_carbono, moeda)
+        valor_compost_eur = calcular_valor_creditos(total_evitado_compost, preco_carbono, moeda)
         
-        valor_tese_brl = calcular_valor_creditos(total_evitado_tese, preco_carbono, "R$", taxa_cambio)
-        valor_unfccc_brl = calcular_valor_creditos(total_evitado_unfccc, preco_carbono, "R$", taxa_cambio)
+        valor_vermi_brl = calcular_valor_creditos(total_evitado_vermi, preco_carbono, "R$", taxa_cambio)
+        valor_compost_brl = calcular_valor_creditos(total_evitado_compost, preco_carbono, "R$", taxa_cambio)
         
         st.subheader("💰 Valor Financeiro das Emissões Evitadas (Cenário Otimista)")
         
@@ -778,15 +777,15 @@ if st.session_state.get('run_simulation', False):
             )
         with col2:
             st.metric(
-                "Valor Tese (Euro)", 
-                f"{moeda} {formatar_br(valor_tese_eur)}",
-                help=f"Baseado em {formatar_br(total_evitado_tese)} tCO₂eq evitadas"
+                "Vermicompostagem (Euro)", 
+                f"{moeda} {formatar_br(valor_vermi_eur)}",
+                help=f"Baseado em {formatar_br(total_evitado_vermi)} tCO₂eq evitadas"
             )
         with col3:
             st.metric(
-                "Valor UNFCCC (Euro)", 
-                f"{moeda} {formatar_br(valor_unfccc_eur)}",
-                help=f"Baseado em {formatar_br(total_evitado_unfccc)} tCO₂eq evitadas"
+                "Compostagem (Euro)", 
+                f"{moeda} {formatar_br(valor_compost_eur)}",
+                help=f"Baseado em {formatar_br(total_evitado_compost)} tCO₂eq evitadas"
             )
         
         col1, col2, col3 = st.columns(3)
@@ -798,15 +797,15 @@ if st.session_state.get('run_simulation', False):
             )
         with col2:
             st.metric(
-                "Valor Tese (R$)", 
-                f"R$ {formatar_br(valor_tese_brl)}",
-                help=f"Baseado em {formatar_br(total_evitado_tese)} tCO₂eq evitadas"
+                "Vermicompostagem (R$)", 
+                f"R$ {formatar_br(valor_vermi_brl)}",
+                help=f"Baseado em {formatar_br(total_evitado_vermi)} tCO₂eq evitadas"
             )
         with col3:
             st.metric(
-                "Valor UNFCCC (R$)", 
-                f"R$ {formatar_br(valor_unfccc_brl)}",
-                help=f"Baseado em {formatar_br(total_evitado_unfccc)} tCO₂eq evitadas"
+                "Compostagem (R$)", 
+                f"R$ {formatar_br(valor_compost_brl)}",
+                help=f"Baseado em {formatar_br(total_evitado_compost)} tCO₂eq evitadas"
             )
         
         with st.expander("💡 Como funciona a comercialização no mercado de carbono?"):
@@ -818,12 +817,12 @@ if st.session_state.get('run_simulation', False):
             - **Fonte:** {fonte_cotacao}
             
             **💶 Comprar créditos (compensação):**
-            - Custo em Euro: **{moeda} {formatar_br(valor_tese_eur)}**
-            - Custo em Real: **R$ {formatar_br(valor_tese_brl)}**
+            - Custo em Euro: **{moeda} {formatar_br(valor_vermi_eur)}**
+            - Custo em Real: **R$ {formatar_br(valor_vermi_brl)}**
             
             **💵 Vender créditos (comercialização):**  
-            - Receita em Euro: **{moeda} {formatar_br(valor_tese_eur)}**
-            - Receita em Real: **R$ {formatar_br(valor_tese_brl)}**
+            - Receita em Euro: **{moeda} {formatar_br(valor_vermi_eur)}**
+            - Receita em Real: **R$ {formatar_br(valor_vermi_brl)}**
             
             **🌍 Mercado de Referência:**
             - European Union Allowances (EUA)
@@ -834,42 +833,42 @@ if st.session_state.get('run_simulation', False):
         
         st.subheader("📊 Resumo das Emissões Evitadas (Cenário Otimista)")
         
-        media_anual_tese = total_evitado_tese / anos_simulacao
-        media_anual_unfccc = total_evitado_unfccc / anos_simulacao
+        media_anual_vermi = total_evitado_vermi / anos_simulacao
+        media_anual_compost = total_evitado_compost / anos_simulacao
         
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("#### 📋 Metodologia da Tese")
+            st.markdown("#### 📋 Vermicompostagem")
             st.metric(
                 "Total de emissões evitadas", 
-                f"{formatar_br(total_evitado_tese)} tCO₂eq",
+                f"{formatar_br(total_evitado_vermi)} tCO₂eq",
                 help=f"Total acumulado em {anos_simulacao} anos"
             )
             st.metric(
                 "Média anual", 
-                f"{formatar_br(media_anual_tese)} tCO₂eq/ano",
+                f"{formatar_br(media_anual_vermi)} tCO₂eq/ano",
                 help=f"Emissões evitadas por ano em média"
             )
 
         with col2:
-            st.markdown("#### 📋 Metodologia UNFCCC")
+            st.markdown("#### 📋 Compostagem")
             st.metric(
                 "Total de emissões evitadas", 
-                f"{formatar_br(total_evitado_unfccc)} tCO₂eq",
+                f"{formatar_br(total_evitado_compost)} tCO₂eq",
                 help=f"Total acumulado em {anos_simulacao} anos"
             )
             st.metric(
                 "Média anual", 
-                f"{formatar_br(media_anual_unfccc)} tCO₂eq/ano",
+                f"{formatar_br(media_anual_compost)} tCO₂eq/ano",
                 help=f"Emissões evitadas por ano em média"
             )
 
         st.subheader("📊 Comparação Anual das Emissões Evitadas (Cenário Otimista)")
         df_evitadas_anual = pd.DataFrame({
             'Year': df_anual_revisado['Year'],
-            'Proposta da Tese': df_anual_revisado['Emission reductions (t CO₂eq)'],
-            'UNFCCC (2012)': df_comp_anual_revisado['Emission reductions (t CO₂eq)']
+            'Vermicompostagem': df_anual_revisado['Emission reductions (t CO₂eq)'],
+            'Compostagem': df_comp_anual_revisado['Emission reductions (t CO₂eq)']
         })
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -877,13 +876,13 @@ if st.session_state.get('run_simulation', False):
         x = np.arange(len(df_evitadas_anual['Year']))
         bar_width = 0.35
 
-        ax.bar(x - bar_width/2, df_evitadas_anual['Proposta da Tese'], width=bar_width,
-                label='Proposta da Tese', edgecolor='black')
-        ax.bar(x + bar_width/2, df_evitadas_anual['UNFCCC (2012)'], width=bar_width,
-                label='UNFCCC (2012)', edgecolor='black', hatch='//')
+        ax.bar(x - bar_width/2, df_evitadas_anual['Vermicompostagem'], width=bar_width,
+                label='Vermicompostagem', edgecolor='black')
+        ax.bar(x + bar_width/2, df_evitadas_anual['Compostagem'], width=bar_width,
+                label='Compostagem', edgecolor='black', hatch='//')
 
-        for i, (v1, v2) in enumerate(zip(df_evitadas_anual['Proposta da Tese'], 
-                                         df_evitadas_anual['UNFCCC (2012)'])):
+        for i, (v1, v2) in enumerate(zip(df_evitadas_anual['Vermicompostagem'], 
+                                         df_evitadas_anual['Compostagem'])):
             ax.text(i - bar_width/2, v1 + max(v1, v2)*0.01, 
                     formatar_br(v1), ha='center', fontsize=9, fontweight='bold')
             ax.text(i + bar_width/2, v2 + max(v1, v2)*0.01, 
@@ -891,12 +890,12 @@ if st.session_state.get('run_simulation', False):
 
         ax.set_xlabel('Ano')
         ax.set_ylabel('Emissões Evitadas (t CO₂eq)')
-        ax.set_title('Comparação Anual das Emissões Evitadas: Proposta da Tese vs UNFCCC (2012)')
+        ax.set_title('Comparação Anual das Emissões Evitadas: Vermicompostagem vs Compostagem')
         
         ax.set_xticks(x)
         ax.set_xticklabels(df_anual_revisado['Year'], fontsize=8)
 
-        ax.legend(title='Metodologia')
+        ax.legend(title='Tecnologia')
         ax.yaxis.set_major_formatter(br_formatter)
         ax.grid(axis='y', linestyle='--', alpha=0.7)
         st.pyplot(fig)
@@ -904,7 +903,7 @@ if st.session_state.get('run_simulation', False):
         st.subheader("📉 Redução de Emissões Acumulada (Cenário Otimista)")
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.plot(df['Data'], df['Total_Aterro_tCO2eq_acum'], 'r-', label='Cenário Base (Aterro Sanitário)', linewidth=2)
-        ax.plot(df['Data'], df['Total_Vermi_tCO2eq_acum'], 'g-', label='Projeto (Compostagem em reatores com minhocas)', linewidth=2)
+        ax.plot(df['Data'], df['Total_Vermi_tCO2eq_acum'], 'g-', label='Vermicompostagem', linewidth=2)
         ax.fill_between(df['Data'], df['Total_Vermi_tCO2eq_acum'], df['Total_Aterro_tCO2eq_acum'],
                         color='skyblue', alpha=0.5, label='Emissões Evitadas')
         ax.set_title('Redução de Emissões em {} Anos (k = {} ano⁻¹)'.format(anos_simulacao, formatar_br(k_ano)))
@@ -919,13 +918,13 @@ if st.session_state.get('run_simulation', False):
         # =============================================================================
         # Análise de Sensibilidade Sobol (apenas GWP20)
         # =============================================================================
-        st.subheader("🎯 Análise de Sensibilidade Global (Sobol) - Proposta da Tese (GWP-20)")
+        st.subheader("🎯 Análise de Sensibilidade Global (Sobol) - Vermicompostagem (GWP-20)")
         st.info("**Parâmetros variados na análise:** Taxa de Decaimento (k), Temperatura (T), DOC")
         br_formatter_sobol = FuncFormatter(br_format)
 
         np.random.seed(50)  
         
-        problem_tese = {
+        problem = {
             'num_vars': 3,
             'names': ['taxa_decaimento', 'T', 'DOC'],
             'bounds': [
@@ -935,16 +934,16 @@ if st.session_state.get('run_simulation', False):
             ]
         }
 
-        param_values_tese = sample(problem_tese, n_samples, seed=50)
+        param_values = sample(problem, n_samples, seed=50)
         # Usar GWP20 para Sobol
         gwp20_ch4, gwp20_n2o = gwps["Otimista (GWP-20)"]
-        results_tese = Parallel(n_jobs=-1)(delayed(executar_simulacao_completa_sobol)(params, gwp20_ch4, gwp20_n2o) for params in param_values_tese)
-        Si_tese = analyze(problem_tese, np.array(results_tese), print_to_console=False)
+        results_vermi = Parallel(n_jobs=-1)(delayed(executar_simulacao_vermi_sobol)(params, gwp20_ch4, gwp20_n2o) for params in param_values)
+        Si_vermi = analyze(problem, np.array(results_vermi), print_to_console=False)
         
-        sensibilidade_df_tese = pd.DataFrame({
-            'Parâmetro': problem_tese['names'],
-            'S1': Si_tese['S1'],
-            'ST': Si_tese['ST']
+        sensibilidade_df_vermi = pd.DataFrame({
+            'Parâmetro': problem['names'],
+            'S1': Si_vermi['S1'],
+            'ST': Si_vermi['ST']
         }).sort_values('ST', ascending=False)
 
         nomes_amigaveis = {
@@ -952,75 +951,64 @@ if st.session_state.get('run_simulation', False):
             'T': 'Temperatura',
             'DOC': 'Carbono Orgânico Degradável'
         }
-        sensibilidade_df_tese['Parâmetro'] = sensibilidade_df_tese['Parâmetro'].map(nomes_amigaveis)
+        sensibilidade_df_vermi['Parâmetro'] = sensibilidade_df_vermi['Parâmetro'].map(nomes_amigaveis)
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_tese, palette='viridis', ax=ax)
-        ax.set_title('Sensibilidade Global - Proposta da Tese (GWP-20)')
+        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_vermi, palette='viridis', ax=ax)
+        ax.set_title('Sensibilidade Global - Vermicompostagem (GWP-20)')
         ax.set_xlabel('Índice ST (Sobol Total)')
         ax.set_ylabel('Parâmetro')
         ax.grid(axis='x', linestyle='--', alpha=0.7)
         ax.xaxis.set_major_formatter(br_formatter_sobol)
         
-        for i, (st_value) in enumerate(sensibilidade_df_tese['ST']):
+        for i, (st_value) in enumerate(sensibilidade_df_vermi['ST']):
             ax.text(st_value, i, f' {formatar_br(st_value)}', va='center', fontweight='bold')
         
         st.pyplot(fig)
         
-        st.subheader("📊 Valores de Sensibilidade - Proposta da Tese (GWP-20)")
-        st.dataframe(sensibilidade_df_tese.style.format({
+        st.subheader("📊 Valores de Sensibilidade - Vermicompostagem (GWP-20)")
+        st.dataframe(sensibilidade_df_vermi.style.format({
             'S1': '{:.4f}',
             'ST': '{:.4f}'
         }))
 
-        st.subheader("🎯 Análise de Sensibilidade Global (Sobol) - Cenário UNFCCC (GWP-20)")
+        st.subheader("🎯 Análise de Sensibilidade Global (Sobol) - Compostagem (GWP-20)")
         st.info("**Parâmetros variados na análise:** Taxa de Decaimento (k), Temperatura (T), DOC")
 
         np.random.seed(50)
         
-        problem_unfccc = {
-            'num_vars': 3,
-            'names': ['taxa_decaimento', 'T', 'DOC'],
-            'bounds': [
-                [0.06, 0.40],
-                [20.0, 40.0],
-                [0.10, 0.25],
-            ]
-        }
-
-        param_values_unfccc = sample(problem_unfccc, n_samples, seed=50)
-        results_unfccc = Parallel(n_jobs=-1)(delayed(executar_simulacao_unfccc_sobol)(params, gwp20_ch4, gwp20_n2o) for params in param_values_unfccc)
-        Si_unfccc = analyze(problem_unfccc, np.array(results_unfccc), print_to_console=False)
+        results_compost = Parallel(n_jobs=-1)(delayed(executar_simulacao_compostagem_sobol)(params, gwp20_ch4, gwp20_n2o) for params in param_values)
+        Si_compost = analyze(problem, np.array(results_compost), print_to_console=False)
         
-        sensibilidade_df_unfccc = pd.DataFrame({
-            'Parâmetro': problem_unfccc['names'],
-            'S1': Si_unfccc['S1'],
-            'ST': Si_unfccc['ST']
+        sensibilidade_df_compost = pd.DataFrame({
+            'Parâmetro': problem['names'],
+            'S1': Si_compost['S1'],
+            'ST': Si_compost['ST']
         }).sort_values('ST', ascending=False)
 
-        sensibilidade_df_unfccc['Parâmetro'] = sensibilidade_df_unfccc['Parâmetro'].map(nomes_amigaveis)
+        sensibilidade_df_compost['Parâmetro'] = sensibilidade_df_compost['Parâmetro'].map(nomes_amigaveis)
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_unfccc, palette='viridis', ax=ax)
-        ax.set_title('Sensibilidade Global - Cenário UNFCCC (GWP-20)')
+        sns.barplot(x='ST', y='Parâmetro', data=sensibilidade_df_compost, palette='viridis', ax=ax)
+        ax.set_title('Sensibilidade Global - Compostagem (GWP-20)')
         ax.set_xlabel('Índice ST (Sobol Total)')
         ax.set_ylabel('Parâmetro')
         ax.grid(axis='x', linestyle='--', alpha=0.7)
         ax.xaxis.set_major_formatter(br_formatter_sobol)
         
-        for i, (st_value) in enumerate(sensibilidade_df_unfccc['ST']):
+        for i, (st_value) in enumerate(sensibilidade_df_compost['ST']):
             ax.text(st_value, i, f' {formatar_br(st_value)}', va='center', fontweight='bold')
         
         st.pyplot(fig)
         
-        st.subheader("📊 Valores de Sensibilidade - Cenário UNFCCC (GWP-20)")
-        st.dataframe(sensibilidade_df_unfccc.style.format({
+        st.subheader("📊 Valores de Sensibilidade - Compostagem (GWP-20)")
+        st.dataframe(sensibilidade_df_compost.style.format({
             'S1': '{:.4f}',
             'ST': '{:.4f}'
         }))
 
         # =============================================================================
-        # Monte Carlo para todos os cenários de GWP (agora com ambas as tecnologias)
+        # Monte Carlo para todos os cenários de GWP
         # =============================================================================
         st.subheader("🎲 Análise de Incerteza (Monte Carlo) - Comparação entre Cenários de GWP")
         
@@ -1048,10 +1036,10 @@ if st.session_state.get('run_simulation', False):
                 thermo_arr.append(res['thermophilic']['avoided_co2eq_t'])
             mc_results[nome] = {
                 'vermicomposting': np.array(vermi_arr),
-                'thermophilic': np.array(thermo_arr)
+                'composting': np.array(thermo_arr)  # renomeado internamente para facilitar
             }
         
-        # Plotar distribuições (mantido igual, apenas para vermicomposting)
+        # Plotar distribuições para vermicompostagem
         fig, ax = plt.subplots(figsize=(12, 6))
         for nome, arr_dict in mc_results.items():
             sns.kdeplot(arr_dict['vermicomposting'], label=nome, ax=ax, linewidth=2)
@@ -1063,7 +1051,7 @@ if st.session_state.get('run_simulation', False):
         ax.xaxis.set_major_formatter(br_format)
         st.pyplot(fig)
         
-        # Tabela de estatísticas para vermicompostagem (mantido igual)
+        # Tabela de estatísticas para vermicompostagem
         stats_list = []
         for nome, arr_dict in mc_results.items():
             arr = arr_dict['vermicomposting']
@@ -1086,39 +1074,39 @@ if st.session_state.get('run_simulation', False):
         }))
         
         # =============================================================================
-        # NOVA ANÁLISE ESTATÍSTICA: Comparação Vermicompostagem vs. Compostagem
+        # ANÁLISE ESTATÍSTICA: Comparação Vermicompostagem vs Compostagem
         # =============================================================================
-        st.subheader("📊 Análise Estatística de Comparação (Vermicompostagem vs. Compostagem)")
+        st.subheader("📊 Análise Estatística de Comparação (Vermicompostagem vs Compostagem)")
         
         # Escolher um cenário de GWP para a comparação (aqui usamos o Otimista - GWP-20)
         gwp_alvo = "Otimista (GWP-20)"
         vermi_arr = mc_results[gwp_alvo]['vermicomposting']
-        thermo_arr = mc_results[gwp_alvo]['thermophilic']
+        compost_arr = mc_results[gwp_alvo]['composting']
         
-        diferenças = vermi_arr - thermo_arr
+        diferenças = vermi_arr - compost_arr
         
         # Teste de normalidade (Shapiro-Wilk)
         shapiro_stat, shapiro_p = stats.shapiro(diferenças)
         st.write(f"**Teste de normalidade das diferenças (Shapiro‑Wilk):** Estatística = {shapiro_stat:.5f}, p‑valor = {shapiro_p:.5f}")
         
         # Teste t pareado
-        t_stat, t_p = stats.ttest_rel(vermi_arr, thermo_arr)
+        t_stat, t_p = stats.ttest_rel(vermi_arr, compost_arr)
         st.write(f"**Teste t pareado:** Estatística t = {t_stat:.5f}, p‑valor = {t_p:.5f}")
         
         # Teste de Wilcoxon (pareado)
-        w_stat, w_p = stats.wilcoxon(vermi_arr, thermo_arr)
+        w_stat, w_p = stats.wilcoxon(vermi_arr, compost_arr)
         st.write(f"**Teste de Wilcoxon (pareado):** Estatística = {w_stat:.5f}, p‑valor = {w_p:.5f}")
         
-        # (Opcional) Tabela resumo para todos os cenários de GWP
+        # Tabela resumo para todos os cenários de GWP
         st.markdown("#### Comparação em todos os cenários de GWP")
         comparacao_stats = []
         for nome in gwps.keys():
             vermi = mc_results[nome]['vermicomposting']
-            thermo = mc_results[nome]['thermophilic']
-            diff = vermi - thermo
+            compost = mc_results[nome]['composting']
+            diff = vermi - compost
             shapiro_p = stats.shapiro(diff)[1]
-            t_stat, t_p = stats.ttest_rel(vermi, thermo)
-            w_stat, w_p = stats.wilcoxon(vermi, thermo)
+            t_stat, t_p = stats.ttest_rel(vermi, compost)
+            w_stat, w_p = stats.wilcoxon(vermi, compost)
             comparacao_stats.append({
                 "Cenário GWP": nome,
                 "Diferença média (tCO₂eq)": np.mean(diff),
@@ -1134,7 +1122,7 @@ if st.session_state.get('run_simulation', False):
             "p‑Wilcoxon": lambda x: f"{x:.5f}"
         }))
         
-        st.subheader("📋 Resultados Anuais - Proposta da Tese (Cenário Otimista)")
+        st.subheader("📋 Resultados Anuais - Vermicompostagem (Cenário Otimista)")
 
         df_anual_formatado = df_anual_revisado.copy()
         for col in df_anual_formatado.columns:
@@ -1143,7 +1131,7 @@ if st.session_state.get('run_simulation', False):
 
         st.dataframe(df_anual_formatado)
 
-        st.subheader("📋 Resultados Anuais - Metodologia UNFCCC (Cenário Otimista)")
+        st.subheader("📋 Resultados Anuais - Compostagem (Cenário Otimista)")
 
         df_comp_formatado = df_comp_anual_revisado.copy()
         for col in df_comp_formatado.columns:
@@ -1165,10 +1153,10 @@ st.markdown("""
 - Metano e Óxido Nitroso no pré-descarte: Feng et al. (2020)
 - **Fator φ = 0,85 (UNFCCC, 2024) aplicado ao baseline para clima úmido**
 
-**Proposta da Tese (Compostagem em reatores com minhocas):**
+**Vermicompostagem (tecnologia proposta):**
 - Metano e Óxido Nitroso: Yang et al. (2017)
 
-**Cenário UNFCCC (Compostagem sem minhocas a céu aberto):**
+**Compostagem termofílica (tecnologia comparativa):**
 - Protocolo AMS-III.F: UNFCCC (2016)
 - Fatores de emissões: Yang et al. (2017)
 
