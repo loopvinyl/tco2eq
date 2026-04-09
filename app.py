@@ -13,6 +13,7 @@ import warnings
 from matplotlib.ticker import FuncFormatter
 from SALib.sample.sobol import sample
 from SALib.analyze.sobol import analyze
+import yfinance as yf   # <-- NOVA IMPORTAÇÃO
 
 np.random.seed(50)
 
@@ -260,84 +261,29 @@ class GHGEmissionCalculator:
         return results
 
 # =============================================================================
-# Funções auxiliares (cotações, formatação) - idênticas ao original
+# Funções auxiliares (cotações, formatação) - MODIFICADA APENAS A COTAÇÃO DO CARBONO
 # =============================================================================
-def obter_cotacao_carbono_investing():
-    try:
-        url = "https://www.investing.com/commodities/carbon-emissions"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Referer': 'https://www.investing.com/'
-        }
-        
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        selectores = [
-            '[data-test="instrument-price-last"]',
-            '.text-2xl',
-            '.last-price-value',
-            '.instrument-price-last',
-            '.pid-1062510-last',
-            '.float_lang_base_1',
-            '.top.bold.inlineblock',
-            '#last_last'
-        ]
-        
-        preco = None
-        fonte = "Investing.com"
-        
-        for seletor in selectores:
-            try:
-                elemento = soup.select_one(seletor)
-                if elemento:
-                    texto_preco = elemento.text.strip().replace(',', '')
-                    texto_preco = ''.join(c for c in texto_preco if c.isdigit() or c == '.')
-                    if texto_preco:
-                        preco = float(texto_preco)
-                        break
-            except (ValueError, AttributeError):
-                continue
-        
-        if preco is not None:
-            return preco, "€", "Carbon Emissions Future", True, fonte
-        
-        import re
-        padroes_preco = [
-            r'"last":"([\d,]+)"',
-            r'data-last="([\d,]+)"',
-            r'last_price["\']?:\s*["\']?([\d,]+)',
-            r'value["\']?:\s*["\']?([\d,]+)'
-        ]
-        
-        html_texto = str(soup)
-        for padrao in padroes_preco:
-            matches = re.findall(padrao, html_texto)
-            for match in matches:
-                try:
-                    preco_texto = match.replace(',', '')
-                    preco = float(preco_texto)
-                    if 50 < preco < 200:
-                        return preco, "€", "Carbon Emissions Future", True, fonte
-                except ValueError:
-                    continue
-                    
-        return None, None, None, False, fonte
-        
-    except Exception as e:
-        return None, None, None, False, f"Investing.com - Erro: {str(e)}"
-
 def obter_cotacao_carbono():
-    preco, moeda, contrato_info, sucesso, fonte = obter_cotacao_carbono_investing()
-    
-    if sucesso:
-        return preco, moeda, f"{contrato_info}", True, fonte
-    
-    return 85.50, "€", "Carbon Emissions (Referência)", False, "Referência"
+    """
+    Obtém a cotação do carbono via Yahoo Finance (ticker CO2.L).
+    Em caso de falha, retorna valor de referência (85.50 €).
+    """
+    try:
+        ticker = yf.Ticker("CO2.L")
+        data = ticker.history(period="1d")
+        if not data.empty:
+            preco = data['Close'].iloc[-1]
+            # Validação básica: preço deve estar entre 10 e 200 €
+            if 10 < preco < 200:
+                return preco, "€", "Carbon Futures (CO2.L)", True, "Yahoo Finance (CO2.L)"
+            else:
+                # Preço fora do intervalo esperado, usar fallback
+                return 85.50, "€", "Carbon Emissions (Referência)", False, "Referência (valor fora da faixa)"
+        else:
+            return 85.50, "€", "Carbon Emissions (Referência)", False, "Referência (dados vazios)"
+    except Exception as e:
+        # Em caso de erro na conexão ou parsing, usa fallback
+        return 85.50, "€", "Carbon Emissions (Referência)", False, f"Referência (erro: {str(e)})"
 
 def obter_cotacao_euro_real():
     try:
@@ -428,8 +374,8 @@ def exibir_cotacao_carbono():
         **🌍 Mercado de Referência:**
         - European Union Allowances (EUA)
         - European Emissions Trading System (EU ETS)
-        - Contratos futuros de carbono
-        - Preços em tempo real
+        - Contratos futuros de carbono (ICE CO2.L)
+        - Preços em tempo real via Yahoo Finance
         
         **🔄 Atualização:**
         - As cotações são carregadas automaticamente ao abrir o aplicativo
