@@ -1,6 +1,4 @@
-# =============================================================================
 # IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
-# =============================================================================
 
 import requests
 from bs4 import BeautifulSoup
@@ -40,9 +38,7 @@ plt.rcParams['font.size'] = 10
 sns.set_style("whitegrid")
 
 
-# =============================================================================
 # CLASSE PARA CÁLCULO DE EMISSÕES DE GEE
-# =============================================================================
 
 class GHGEmissionCalculator:
     """
@@ -279,9 +275,7 @@ class GHGEmissionCalculator:
         return results
 
 
-# =============================================================================
 # FUNÇÕES DE COTAÇÃO (MERCADO DE CARBONO E CÂMBIO)
-# =============================================================================
 
 def obter_cotacao_carbono():
     """
@@ -328,9 +322,7 @@ def calcular_valor_creditos(emissoes_evitadas_tco2eq, preco_carbono_por_tonelada
     return emissoes_evitadas_tco2eq * preco_carbono_por_tonelada * taxa_cambio
 
 
-# =============================================================================
 # INTERFACE STREAMLIT – BARRA LATERAL E EXIBIÇÃO DE COTAÇÕES
-# =============================================================================
 
 def exibir_cotacao_carbono():
     """Exibe na barra lateral os preços do carbono e do câmbio EUR/BRL."""
@@ -422,9 +414,7 @@ def inicializar_session_state():
 inicializar_session_state()
 
 
-# =============================================================================
 # FUNÇÕES AUXILIARES DE FORMATAÇÃO BRASILEIRA
-# =============================================================================
 
 def formatar_br(numero):
     """Formata número para padrão brasileiro (2 casas decimais)."""
@@ -451,9 +441,7 @@ def br_format(x, pos):
     return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-# =============================================================================
 # INTERFACE PRINCIPAL E PARÂMETROS DE ENTRADA
-# =============================================================================
 
 st.title("Simulador de Emissões de tCO₂eq e Cálculo de Créditos de Carbono com Análise de Sensibilidade Global")
 st.markdown("Esta ferramenta projeta os Créditos de Carbono ao calcular as emissões de gases de efeito estufa para dois contextos de gestão de resíduos")
@@ -511,9 +499,7 @@ with st.sidebar:
         st.session_state.run_simulation = True
 
 
-# =============================================================================
 # FUNÇÕES AUXILIARES PARA SIMULAÇÃO (GWP, SOBOL, MONTE CARLO)
-# =============================================================================
 
 def compute_results_for_gwp(gwp_ch4, gwp_n2o, waste_kg_day, k_year, temperature_C,
                             doc_fraction, moisture_fraction, years, phi_baseline=0.85):
@@ -571,9 +557,7 @@ def gerar_parametros_mc(n):
     return umidade_vals, temp_vals, doc_vals
 
 
-# =============================================================================
 # EXECUÇÃO DA SIMULAÇÃO (QUANDO BOTÃO FOR CLICADO)
-# =============================================================================
 
 if st.session_state.get('run_simulation', False):
     with st.spinner('Executando simulação...'):
