@@ -2,9 +2,9 @@ name: Wake Up Streamlit App
 
 on:
   schedule:
-    # Executa a cada 5 horas (UTC) – ajuste se desejar
+    # Executa a cada 5 horas (UTC). Ajuste se necessário.
     - cron: '0 */5 * * *'
-  workflow_dispatch:  # permite rodar manualmente para testes
+  workflow_dispatch:  # permite execução manual para testes
 
 jobs:
   wake_up:
@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
