@@ -103,7 +103,7 @@ class GHGEmissionCalculator:
     def _setup_pre_disposal_emissions(self):
         """Emissões na fase de pré-descarte (antes do tratamento)."""
         CH4_pre_ugC_per_kg_h = 2.78
-        self.CH4_pre_kg_per_kg_day = CH4_pre_ugC_per_kg_h * (16/12) * 24 / 1_000_000
+        self.CH4_pre_kg_per_kg_day = CH4_pre_ugC_per_kg_h * (16/12) * 24 / 1_000_000_000
 
         N2O_pre_mgN_per_kg = 20.26
         N2O_pre_mgN_per_kg_day = N2O_pre_mgN_per_kg / 3
