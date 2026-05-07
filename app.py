@@ -102,12 +102,14 @@ class GHGEmissionCalculator:
 
     def _setup_pre_disposal_emissions(self):
         """Emissões na fase de pré-descarte (antes do tratamento)."""
+        # CH₄: taxa constante diária (2,78 μg C kg⁻¹ h⁻¹ → kg CH₄ kg⁻¹ dia⁻¹)
         CH4_pre_ugC_per_kg_h = 2.78
         self.CH4_pre_kg_per_kg_day = CH4_pre_ugC_per_kg_h * (16/12) * 24 / 1_000_000_000
 
-        N2O_pre_mgN_per_kg = 20.26
-        N2O_pre_mgN_per_kg_day = N2O_pre_mgN_per_kg / 3
-        self.N2O_pre_kg_per_kg_day = N2O_pre_mgN_per_kg_day * (44/28) / 1_000_000
+        # N₂O: emissão total nos 3 dias (20,26 mg N kg⁻¹, segundo Feng et al. 2020)
+        N2O_pre_mgN_per_kg_total = 20.26
+        # Fator de emissão total de N₂O em kg N₂O por kg de resíduo (para os 3 dias)
+        self.N2O_pre_kg_per_kg_total = N2O_pre_mgN_per_kg_total * (44/28) / 1_000_000
 
         self.profile_n2o_pre = {1: 0.8623, 2: 0.10, 3: 0.0377}
 
@@ -167,11 +169,12 @@ class GHGEmissionCalculator:
         ch4_emissions = np.full(days, waste_kg_day * self.CH4_pre_kg_per_kg_day)
         n2o_emissions = np.zeros(days)
 
+        # Utiliza o fator total de N₂O e as frações diárias (que somam 1)
         for entry_day in range(days):
             for days_after, fraction in self.profile_n2o_pre.items():
                 emission_day = entry_day + days_after - 1
                 if emission_day < days:
-                    n2o_emissions[emission_day] += (waste_kg_day * self.N2O_pre_kg_per_kg_day * fraction)
+                    n2o_emissions[emission_day] += (waste_kg_day * self.N2O_pre_kg_per_kg_total * fraction)
 
         return ch4_emissions, n2o_emissions
 
