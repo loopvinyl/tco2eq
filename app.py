@@ -1,5 +1,4 @@
 # IMPORTAÇÕES E CONFIGURAÇÕES INICIAIS
-
 import requests
 import streamlit as st
 import numpy as np
