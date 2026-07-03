@@ -43,7 +43,7 @@ class GHGEmissionCalculator:
     - Aterro sanitário (baseline, método FOD do IPCC)
     - Vermicompostagem
     - Compostagem termofílica
-    Inclui correção φ (UNFCCC 2024) e fator de captura de metano.
+    Inclui correção φ (UNFCCC 2025) e fator de captura de metano.
     """
 
     def __init__(self):
@@ -605,7 +605,7 @@ if st.session_state.get('run_simulation', False):
         - Umidade: {formatar_br(umidade_valor)}%
         - Resíduos/dia: {formatar_br(residuos_kg_dia)} kg
         - Total de resíduos: {formatar_br(residuos_kg_dia * 365 * anos_simulacao / 1000)} toneladas
-        - Fator φ (baseline): 0,85 (UNFCCC 2024 - clima úmido)
+        - Fator φ (baseline): 0,85 (UNFCCC 2025 - clima úmido)
         """)
 
         # Tabela comparativa de GWP
@@ -934,7 +934,7 @@ st.markdown("""
 - Metano: IPCC (2006), UNFCCC (2016) e Wang et al. (2023)
 - Óxido Nitroso: Wang et al. (2017)
 - Metano e Óxido Nitroso no pré-descarte: Feng et al. (2020)
-- **Fator φ = 0,85 (UNFCCC, 2024) aplicado ao baseline para clima úmido**
+- **Fator φ = 0,85 (UNFCCC, 2025) aplicado ao baseline para clima úmido**
 
 **Vermicompostagem (tecnologia proposta):**
 - Metano e Óxido Nitroso: Yang et al. (2017)
