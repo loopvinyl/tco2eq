@@ -148,9 +148,21 @@ class GHGEmissionCalculator:
         return ch4_emissions + ch4_pre, n2o_emissions + n2o_pre
 
     def _calculate_pre_disposal(self, waste_kg_day, days):
-        """Emissões diárias durante o pré-descarte."""
-        ch4_emissions = np.full(days, waste_kg_day * self.CH4_pre_kg_per_kg_day)
+        """
+        Emissões diárias durante o pré-descarte.
+        CH₄: emissão diária acumulada ao longo de 3 dias de permanência no pré‑descarte.
+        N₂O: total de 3 dias distribuído pelas frações f₀, f₁, f₂.
+        Correção aplicada para compatibilidade com as Equações (3) e (6) do texto.
+        """
+        ch4_emissions = np.zeros(days)
         n2o_emissions = np.zeros(days)
+        # CH₄ – acumula 3 dias de emissão para cada lote diário
+        for entry_day in range(days):
+            for days_after in range(1, 4):  # 3 dias de permanência
+                emission_day = entry_day + days_after - 1
+                if emission_day < days:
+                    ch4_emissions[emission_day] += (waste_kg_day * self.CH4_pre_kg_per_kg_day)
+        # N₂O – distribuição pelas frações diárias (soma = 1)
         for entry_day in range(days):
             for days_after, fraction in self.profile_n2o_pre.items():
                 emission_day = entry_day + days_after - 1
